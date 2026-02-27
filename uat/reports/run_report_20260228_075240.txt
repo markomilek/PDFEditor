@@ -1,0 +1,89 @@
+PDFEditor Run Report
+
+Timestamp (local): 2026-02-28T07:52:40.767514+08:00
+Timestamp (UTC):   2026-02-27T23:52:40.767524+00:00
+User:              markomilek
+Host:              MarkoMini.localdomain
+Python:            3.14.2
+pypdf:             6.7.4
+
+Config:
+  path=uat/input
+  out=uat/output
+  report_dir=uat/reports
+  recursive=False
+  write_when_unchanged=False
+  treat_annotations_as_empty=True
+  dry_run=False
+  verbose=True
+
+Totals:
+  files_found=6
+  files_processed=5
+  files_failed=1
+  files_written=3
+  files_edited=3
+  files_unchanged=2
+  files_dry_run=0
+  pages_original_total=15
+  pages_removed_total=3
+  pages_output_total=12
+
+Files:
+status     removed  output input
+edited           1       2 uat/input/uat_annotation_only_page.pdf
+edited           1       2 uat/input/uat_blank_middle_page.pdf
+unchanged        0       3 uat/input/uat_clean_document.pdf
+failed           0       0 uat/input/uat_corrupted_file.pdf
+unchanged        0       3 uat/input/uat_page_number_only.pdf
+edited           1       2 uat/input/uat_with_bookmark_to_blank.pdf
+
+[edited] uat/input/uat_annotation_only_page.pdf
+  output=uat/output/uat_annotation_only_page.edited.pdf
+  pages_original=3
+  pages_removed=1
+  pages_output=2
+  timings={'detection_seconds': 1.9e-05, 'write_seconds': 0.000669, 'total_seconds': 0.000989}
+  decisions_summary={'empty_pages': 1, 'non_empty_pages': 2, 'has_fonts': 2, 'no_contents': 1}
+
+[edited] uat/input/uat_blank_middle_page.pdf
+  output=uat/output/uat_blank_middle_page.edited.pdf
+  pages_original=3
+  pages_removed=1
+  pages_output=2
+  timings={'detection_seconds': 1.7e-05, 'write_seconds': 0.00045, 'total_seconds': 0.000676}
+  decisions_summary={'empty_pages': 1, 'non_empty_pages': 2, 'has_fonts': 2, 'no_contents': 1}
+
+[unchanged] uat/input/uat_clean_document.pdf
+  output=-
+  pages_original=3
+  pages_removed=0
+  pages_output=3
+  timings={'detection_seconds': 9e-06, 'total_seconds': 0.000204}
+  decisions_summary={'empty_pages': 0, 'non_empty_pages': 3, 'has_fonts': 3}
+
+[failed] uat/input/uat_corrupted_file.pdf
+  output=-
+  pages_original=0
+  pages_removed=0
+  pages_output=0
+  timings={'total_seconds': 0.000101}
+  decisions_summary={'empty_pages': 0, 'non_empty_pages': 0}
+  error: read_error: Stream has ended unexpectedly
+
+[unchanged] uat/input/uat_page_number_only.pdf
+  output=-
+  pages_original=3
+  pages_removed=0
+  pages_output=3
+  timings={'detection_seconds': 8e-06, 'total_seconds': 0.000198}
+  decisions_summary={'empty_pages': 0, 'non_empty_pages': 3, 'has_fonts': 3}
+
+[edited] uat/input/uat_with_bookmark_to_blank.pdf
+  output=uat/output/uat_with_bookmark_to_blank.edited.pdf
+  pages_original=3
+  pages_removed=1
+  pages_output=2
+  timings={'detection_seconds': 8e-06, 'write_seconds': 0.000462, 'total_seconds': 0.000662}
+  decisions_summary={'empty_pages': 1, 'non_empty_pages': 2, 'has_fonts': 2, 'no_contents': 1}
+  warning: Dropped 1 outline item(s) that referenced removed or unsupported pages.

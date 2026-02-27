@@ -4,18 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 from pypdf import PdfReader
 
 from pdfeditor.rewrite import rewrite_pdf_removing_pages
 from tests.pdf_factory import OutlineSpec, empty_page, text_page, write_pdf_with_pages
 
 
-@pytest.mark.xfail(
-    reason="Rewrite logic not implemented yet",
-    raises=NotImplementedError,
-    strict=True,
-)
 def test_bookmark_referencing_removed_page_is_dropped(tmp_path: Path) -> None:
     input_path = write_pdf_with_pages(
         tmp_path / "bookmark-source.pdf",

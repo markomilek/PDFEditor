@@ -12,15 +12,13 @@ Expect generated run reports in `uat/reports/`.
 
 `uat/output/` and `uat/reports/` are safe to delete and regenerate.
 
-## Planned Interface
+## CLI
 
-Run the planned CLI interface from the repository root:
+Run the CLI from the repository root:
 
 ```bash
 pdfeditor --path uat/input --out uat/output --report-dir uat/reports
 ```
-
-These flags are not implemented yet. The command above documents the intended UAT workflow.
 
 ## Suggested Test PDFs
 

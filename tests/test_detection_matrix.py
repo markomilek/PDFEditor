@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from io import BytesIO
+
 import pytest
+from pypdf import PdfReader
 
 pypdf = pytest.importorskip("pypdf", reason="pypdf is required for PDF factory tests")
 
-from pdfeditor.detect_empty import detect_empty_pages
+from pdfeditor.detect_empty import detect_empty_pages, is_page_empty_structural
 from tests.pdf_factory import (
     annotation_only_page,
     create_pdf_with_pages,
@@ -17,11 +20,6 @@ from tests.pdf_factory import (
 )
 
 
-@pytest.mark.xfail(
-    reason="Empty-page detection not implemented yet",
-    raises=NotImplementedError,
-    strict=True,
-)
 @pytest.mark.parametrize(
     ("label", "page_specs", "expected"),
     [
@@ -66,3 +64,13 @@ def test_detection_matrix_future_behavior(
     pdf_bytes = create_pdf_with_pages(page_specs)
     result = detect_empty_pages(pdf_bytes)
     assert list(result) == expected
+
+
+def test_annotation_only_page_is_not_empty_when_annotations_are_not_treated_as_empty() -> None:
+    pdf_bytes = create_pdf_with_pages([annotation_only_page()])
+    reader = PdfReader(BytesIO(pdf_bytes))
+    is_empty, _, _ = is_page_empty_structural(
+        reader.pages[0],
+        treat_annotations_as_empty=False,
+    )
+    assert is_empty is False

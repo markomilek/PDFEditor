@@ -22,13 +22,14 @@ Purpose:
 
 ### `test_detection_matrix.py`
 
-Future-facing empty-page detection matrix.
+Structural empty-page detection matrix.
 
 Current coverage:
 
 * defines expected outcomes for synthetic PDFs generated with `tests/pdf_factory.py`
 * documents the intended default policy from `DECISIONS.md`
-* is currently marked `xfail` because empty-page detection is not implemented yet
+* verifies the default behavior for empty, annotation-only, text, footer-text, and whitespace-only pages
+* verifies that annotation-only pages become non-empty when annotation handling is disabled
 
 Expected behavior captured by the test matrix:
 
@@ -39,14 +40,13 @@ Expected behavior captured by the test matrix:
 
 ### `test_bookmark_drop.py`
 
-Future-facing bookmark/outline rewrite behavior test.
+Bookmark/outline rewrite behavior test.
 
 Current coverage:
 
 * generates a PDF with three pages
 * creates a bookmark targeting a page that is expected to be removed later
-* defines the expected post-rewrite behavior
-* is currently marked `xfail` because rewrite logic is not implemented yet
+* verifies the expected post-rewrite behavior
 
 Expected behavior captured by the test:
 
@@ -55,18 +55,29 @@ Expected behavior captured by the test:
 
 ### `test_rewrite_behavior.py`
 
-Future-facing rewrite behavior test for page removal.
+Rewrite behavior tests for page removal and output naming.
 
 Current coverage:
 
 * generates a simple PDF with a removable middle page
-* documents the expected output naming convention
-* is currently marked `xfail` because rewrite logic is not implemented yet
+* verifies the output naming convention
+* verifies collision-safe numeric suffixing when an edited output already exists
 
 Expected behavior captured by the test:
 
 * rewritten output should use the `.edited.pdf` suffix
 * removing one page should reduce the output page count by one
+
+### `test_cli_end_to_end.py`
+
+End-to-end CLI and reporting test.
+
+Current coverage:
+
+* runs the CLI against a temporary input directory
+* verifies that an edited PDF is written
+* verifies that JSON and text reports are always written
+* checks basic totals in the generated JSON report
 
 ## Test Support Files
 

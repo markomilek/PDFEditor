@@ -1,0 +1,362 @@
+{
+  "config": {
+    "dry_run": false,
+    "out": "uat/output",
+    "path": "uat/input",
+    "recursive": false,
+    "report_dir": "uat/reports",
+    "treat_annotations_as_empty": true,
+    "verbose": true,
+    "write_when_unchanged": false
+  },
+  "errors": [],
+  "files": [
+    {
+      "decisions_summary": {
+        "empty_pages": 1,
+        "has_fonts": 2,
+        "no_contents": 1,
+        "non_empty_pages": 2
+      },
+      "errors": [],
+      "input_path": "uat/input/uat_annotation_only_page.pdf",
+      "output_path": "uat/output/uat_annotation_only_page.edited.pdf",
+      "page_decisions": [
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 0,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "annotation_count": 1,
+            "has_contents": false,
+            "has_fonts": false,
+            "has_xobject": false,
+            "resource_keys": [],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": true,
+          "page_index": 1,
+          "reason": "no_contents"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 2,
+          "reason": "has_fonts"
+        }
+      ],
+      "pages_original": 3,
+      "pages_output": 2,
+      "pages_removed": 1,
+      "status": "edited",
+      "timings": {
+        "detection_seconds": 1.9e-05,
+        "total_seconds": 0.000989,
+        "write_seconds": 0.000669
+      },
+      "warnings": []
+    },
+    {
+      "decisions_summary": {
+        "empty_pages": 1,
+        "has_fonts": 2,
+        "no_contents": 1,
+        "non_empty_pages": 2
+      },
+      "errors": [],
+      "input_path": "uat/input/uat_blank_middle_page.pdf",
+      "output_path": "uat/output/uat_blank_middle_page.edited.pdf",
+      "page_decisions": [
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 0,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "annotation_count": 0,
+            "has_contents": false,
+            "has_fonts": false,
+            "has_xobject": false,
+            "resource_keys": [],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": true,
+          "page_index": 1,
+          "reason": "no_contents"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 2,
+          "reason": "has_fonts"
+        }
+      ],
+      "pages_original": 3,
+      "pages_output": 2,
+      "pages_removed": 1,
+      "status": "edited",
+      "timings": {
+        "detection_seconds": 1.7e-05,
+        "total_seconds": 0.000676,
+        "write_seconds": 0.00045
+      },
+      "warnings": []
+    },
+    {
+      "decisions_summary": {
+        "empty_pages": 0,
+        "has_fonts": 3,
+        "non_empty_pages": 3
+      },
+      "errors": [],
+      "input_path": "uat/input/uat_clean_document.pdf",
+      "output_path": null,
+      "page_decisions": [
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 0,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 1,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 2,
+          "reason": "has_fonts"
+        }
+      ],
+      "pages_original": 3,
+      "pages_output": 3,
+      "pages_removed": 0,
+      "status": "unchanged",
+      "timings": {
+        "detection_seconds": 9e-06,
+        "total_seconds": 0.000204
+      },
+      "warnings": []
+    },
+    {
+      "decisions_summary": {
+        "empty_pages": 0,
+        "non_empty_pages": 0
+      },
+      "errors": [
+        "read_error: Stream has ended unexpectedly"
+      ],
+      "input_path": "uat/input/uat_corrupted_file.pdf",
+      "output_path": null,
+      "page_decisions": [],
+      "pages_original": 0,
+      "pages_output": 0,
+      "pages_removed": 0,
+      "status": "failed",
+      "timings": {
+        "total_seconds": 0.000101
+      },
+      "warnings": []
+    },
+    {
+      "decisions_summary": {
+        "empty_pages": 0,
+        "has_fonts": 3,
+        "non_empty_pages": 3
+      },
+      "errors": [],
+      "input_path": "uat/input/uat_page_number_only.pdf",
+      "output_path": null,
+      "page_decisions": [
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 0,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 1,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 2,
+          "reason": "has_fonts"
+        }
+      ],
+      "pages_original": 3,
+      "pages_output": 3,
+      "pages_removed": 0,
+      "status": "unchanged",
+      "timings": {
+        "detection_seconds": 8e-06,
+        "total_seconds": 0.000198
+      },
+      "warnings": []
+    },
+    {
+      "decisions_summary": {
+        "empty_pages": 1,
+        "has_fonts": 2,
+        "no_contents": 1,
+        "non_empty_pages": 2
+      },
+      "errors": [],
+      "input_path": "uat/input/uat_with_bookmark_to_blank.pdf",
+      "output_path": "uat/output/uat_with_bookmark_to_blank.edited.pdf",
+      "page_decisions": [
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 0,
+          "reason": "has_fonts"
+        },
+        {
+          "details": {
+            "annotation_count": 0,
+            "has_contents": false,
+            "has_fonts": false,
+            "has_xobject": false,
+            "resource_keys": [],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": true,
+          "page_index": 1,
+          "reason": "no_contents"
+        },
+        {
+          "details": {
+            "has_fonts": true,
+            "has_xobject": false,
+            "resource_keys": [
+              "/Font"
+            ],
+            "treat_annotations_as_empty": true
+          },
+          "is_empty": false,
+          "page_index": 2,
+          "reason": "has_fonts"
+        }
+      ],
+      "pages_original": 3,
+      "pages_output": 2,
+      "pages_removed": 1,
+      "status": "edited",
+      "timings": {
+        "detection_seconds": 8e-06,
+        "total_seconds": 0.000662,
+        "write_seconds": 0.000462
+      },
+      "warnings": [
+        "Dropped 1 outline item(s) that referenced removed or unsupported pages."
+      ]
+    }
+  ],
+  "host": "MarkoMini.localdomain",
+  "pypdf_version": "6.7.4",
+  "python_version": "3.14.2",
+  "timestamp_local": "2026-02-28T07:52:40.767514+08:00",
+  "timestamp_utc": "2026-02-27T23:52:40.767524+00:00",
+  "totals": {
+    "files_dry_run": 0,
+    "files_edited": 3,
+    "files_failed": 1,
+    "files_found": 6,
+    "files_processed": 5,
+    "files_unchanged": 2,
+    "files_written": 3,
+    "pages_original_total": 15,
+    "pages_output_total": 12,
+    "pages_removed_total": 3
+  },
+  "user": "markomilek",
+  "warnings": []
+}

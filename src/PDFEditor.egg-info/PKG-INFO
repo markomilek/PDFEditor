@@ -1,0 +1,32 @@
+Metadata-Version: 2.4
+Name: PDFEditor
+Version: 0.0.0
+Summary: CLI scaffold for conservative PDF editing workflows.
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: pypdf
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Dynamic: license-file
+
+# PDFEditor
+
+Minimal scaffold for a cross-platform `pdfeditor` command-line tool.
+
+## Install
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip3 install -r requirements.txt
+pip install -e .
+```
+
+## Run
+
+```bash
+pdfeditor
+```
+
+Functionality will be implemented in subsequent commits.
