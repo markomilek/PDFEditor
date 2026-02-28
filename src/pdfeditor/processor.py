@@ -8,6 +8,7 @@ from time import perf_counter
 from pypdf import PdfReader
 
 from pdfeditor.detect_empty import detect_page_decisions
+from pdfeditor.detect_render import detect_empty_pages_render
 from pdfeditor.models import FileResult, PageDecision, RunConfig
 from pdfeditor.rewrite import rewrite_pdf
 
@@ -47,9 +48,23 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
     pages_original = len(reader.pages)
 
     detect_start = perf_counter()
-    decisions = detect_page_decisions(
+    structural_decisions = detect_page_decisions(
         reader=reader,
         treat_annotations_as_empty=config.treat_annotations_as_empty,
+    )
+    render_decisions: list[PageDecision] | None = None
+    if config.effective_mode in {"render", "both"}:
+        render_decisions = detect_empty_pages_render(
+            input_path=input_path,
+            dpi=config.render_dpi,
+            ink_threshold=config.ink_threshold,
+            sample=config.render_sample,
+            background=config.effective_background,
+        )
+    decisions = _combine_decisions(
+        structural_decisions=structural_decisions,
+        render_decisions=render_decisions,
+        mode=config.effective_mode,
     )
     timings["detection_seconds"] = round(perf_counter() - detect_start, 6)
 
@@ -133,11 +148,23 @@ def _summarize_decisions(decisions: list[PageDecision]) -> dict[str, int]:
         "non_empty_pages": 0,
         "no_paint_ops_pages": 0,
         "only_invisible_paint_pages": 0,
+        "render_empty_pages": 0,
+        "structural_empty_pages": 0,
         "visible_pages": 0,
+        "both_empty_pages": 0,
     }
     for decision in decisions:
         summary["empty_pages" if decision.is_empty else "non_empty_pages"] += 1
         summary[decision.reason] = summary.get(decision.reason, 0) + 1
+        details = decision.details
+        structural_empty = bool(details.get("structural_is_empty"))
+        render_empty = bool(details.get("render_is_empty"))
+        if structural_empty:
+            summary["structural_empty_pages"] += 1
+        if render_empty:
+            summary["render_empty_pages"] += 1
+        if structural_empty and render_empty:
+            summary["both_empty_pages"] += 1
         if decision.reason == "only_invisible_paint":
             summary["only_invisible_paint_pages"] += 1
         elif decision.reason in {"no_paint_ops", "no_contents", "contents_whitespace_only"}:
@@ -145,3 +172,77 @@ def _summarize_decisions(decisions: list[PageDecision]) -> dict[str, int]:
         elif not decision.is_empty:
             summary["visible_pages"] += 1
     return summary
+
+
+def _combine_decisions(
+    structural_decisions: list[PageDecision],
+    render_decisions: list[PageDecision] | None,
+    mode: str,
+) -> list[PageDecision]:
+    if mode == "structural":
+        return [
+            _combined_page_decision(
+                page_index=decision.page_index,
+                structural_decision=decision,
+                render_decision=None,
+                mode=mode,
+            )
+            for decision in structural_decisions
+        ]
+    if render_decisions is None:
+        raise ValueError("Render decisions are required for render-based modes.")
+    if len(structural_decisions) != len(render_decisions):
+        raise ValueError("Structural and render decisions must cover the same number of pages.")
+    return [
+        _combined_page_decision(
+            page_index=structural_decision.page_index,
+            structural_decision=structural_decision,
+            render_decision=render_decision,
+            mode=mode,
+        )
+        for structural_decision, render_decision in zip(structural_decisions, render_decisions, strict=True)
+    ]
+
+
+def _combined_page_decision(
+    page_index: int,
+    structural_decision: PageDecision,
+    render_decision: PageDecision | None,
+    mode: str,
+) -> PageDecision:
+    structural_is_empty = structural_decision.is_empty
+    render_is_empty = render_decision.is_empty if render_decision is not None else False
+
+    if mode == "structural":
+        is_empty = structural_is_empty
+        reason = "structural_empty" if structural_is_empty else "non_empty"
+    elif mode == "render":
+        is_empty = render_is_empty
+        reason = "render_empty" if render_is_empty else "non_empty"
+    elif structural_is_empty and render_is_empty:
+        is_empty = True
+        reason = "both_empty"
+    elif structural_is_empty:
+        is_empty = True
+        reason = "structural_empty"
+    elif render_is_empty:
+        is_empty = True
+        reason = "render_empty"
+    else:
+        is_empty = False
+        reason = "non_empty"
+
+    details = {
+        "structural": structural_decision.details,
+        "structural_is_empty": structural_is_empty,
+        "structural_reason": structural_decision.reason,
+        "render": render_decision.details if render_decision is not None else None,
+        "render_is_empty": render_is_empty if render_decision is not None else None,
+        "render_reason": render_decision.reason if render_decision is not None else None,
+    }
+    return PageDecision(
+        page_index=page_index,
+        is_empty=is_empty,
+        reason=reason,
+        details=details,
+    )

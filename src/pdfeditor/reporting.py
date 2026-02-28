@@ -12,6 +12,7 @@ from typing import Any
 
 import pypdf
 
+from pdfeditor.detect_render import get_render_backend_version
 from pdfeditor.models import JSONValue, FileResult, RunConfig, RunResult
 
 
@@ -31,6 +32,7 @@ def build_run_result(
         host=platform.node(),
         python_version=sys.version.split()[0],
         pypdf_version=pypdf.__version__,
+        pypdfium2_version=get_render_backend_version(),
         config=config,
         files=files,
         totals=_build_totals(files),
@@ -60,7 +62,7 @@ def run_result_to_dict(run_result: RunResult) -> dict[str, JSONValue]:
 
 
 def _build_totals(files: list[FileResult]) -> dict[str, int]:
-    return {
+    totals = {
         "files_found": len(files),
         "files_processed": sum(1 for file in files if file.status != "failed"),
         "files_failed": sum(1 for file in files if file.status == "failed"),
@@ -71,7 +73,22 @@ def _build_totals(files: list[FileResult]) -> dict[str, int]:
         "pages_original_total": sum(file.pages_original for file in files),
         "pages_removed_total": sum(file.pages_removed for file in files),
         "pages_output_total": sum(file.pages_output for file in files),
+        "removed_pages_total": sum(file.pages_removed for file in files),
+        "structural_empty_pages": 0,
+        "render_empty_pages": 0,
+        "both_empty_pages": 0,
     }
+    for file_result in files:
+        totals["structural_empty_pages"] += file_result.decisions_summary.get(
+            "structural_empty_pages",
+            0,
+        )
+        totals["render_empty_pages"] += file_result.decisions_summary.get(
+            "render_empty_pages",
+            0,
+        )
+        totals["both_empty_pages"] += file_result.decisions_summary.get("both_empty_pages", 0)
+    return totals
 
 
 def _timestamp_for_filename(timestamp_local: str) -> str:
@@ -94,16 +111,30 @@ def _text_report(run_result: RunResult) -> str:
         f"Host:              {run_result.host}",
         f"Python:            {run_result.python_version}",
         f"pypdf:             {run_result.pypdf_version}",
+        f"pypdfium2:         {run_result.pypdfium2_version or 'not installed'}",
         "",
         "Config:",
         f"  path={run_result.config.path}",
         f"  out={run_result.config.out}",
         f"  report_dir={run_result.config.report_dir}",
+        f"  mode={run_result.config.mode}",
+        f"  effective_mode={run_result.config.effective_mode}",
+        f"  render_dpi={run_result.config.render_dpi}",
+        f"  ink_threshold={run_result.config.ink_threshold}",
+        f"  background={run_result.config.background}",
+        f"  effective_background={run_result.config.effective_background}",
+        f"  render_sample={run_result.config.render_sample}",
         f"  recursive={run_result.config.recursive}",
         f"  write_when_unchanged={run_result.config.write_when_unchanged}",
         f"  treat_annotations_as_empty={run_result.config.treat_annotations_as_empty}",
         f"  dry_run={run_result.config.dry_run}",
         f"  verbose={run_result.config.verbose}",
+        "",
+        "Detection Summary:",
+        f"  structural_empty_pages={run_result.totals.get('structural_empty_pages', 0)}",
+        f"  render_empty_pages={run_result.totals.get('render_empty_pages', 0)}",
+        f"  both_empty_pages={run_result.totals.get('both_empty_pages', 0)}",
+        f"  removed_pages_total={run_result.totals.get('removed_pages_total', 0)}",
         "",
         "Totals:",
     ]

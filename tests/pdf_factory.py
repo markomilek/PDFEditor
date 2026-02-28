@@ -200,7 +200,7 @@ def _apply_page_spec(page: PageObject, page_spec: PageSpec) -> None:
 def _apply_text_content(page: PageObject, text: str, x: int, y: int) -> None:
     page[NameObject("/Resources")] = _font_resources_dictionary()
     escaped_text = _escape_pdf_text(text)
-    content = f"BT /F1 12 Tf {x} {y} Td ({escaped_text}) Tj ET".encode("ascii")
+    content = f"BT /F1 24 Tf {x} {y} Td ({escaped_text}) Tj ET".encode("ascii")
     _apply_raw_content(page, content)
 
 

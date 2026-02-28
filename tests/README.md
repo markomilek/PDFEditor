@@ -84,6 +84,16 @@ Current coverage:
 * verifies that JSON and text reports are always written
 * checks basic totals in the generated JSON report
 
+### `test_cli_modes.py`
+
+CLI mode and optional-render fallback tests.
+
+Current coverage:
+
+* verifies render-related CLI argument parsing
+* verifies `--mode both` falls back to structural-only when `pypdfium2` is unavailable
+* verifies `--mode render` exits with code `2` and writes reports when `pypdfium2` is unavailable
+
 ### `test_wordlike_blank_page.py`
 
 Regression test for Word-like blank pages that still carry font resources.
@@ -104,6 +114,16 @@ Current coverage:
 * verifies that text with font size `0` is treated as empty
 * verifies that text under zero-opacity `ExtGState` is treated as empty
 * verifies that a normal visible text page remains non-empty
+
+### `test_render_detection.py`
+
+Optional render-detector tests.
+
+Current coverage:
+
+* skipped automatically when `pypdfium2` is not installed
+* verifies that a rendered blank page is classified empty
+* verifies that a rendered text page is classified non-empty
 
 ## Test Support Files
 
@@ -153,3 +173,18 @@ Structural mode still does not attempt:
 
 * white-on-white detection
 * hidden-behind-objects or z-order visibility analysis
+
+## Render Mode
+
+Render mode is optional and depends on `pypdfium2`.
+
+Modes:
+
+* `structural`: use only the structural detector
+* `render`: use only the rendering detector
+* `both`: remove a page if either detector marks it empty
+
+If `pypdfium2` is unavailable:
+
+* `render` fails with exit code `2`
+* `both` falls back to structural-only and records a warning

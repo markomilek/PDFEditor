@@ -49,3 +49,4 @@ def test_cli_processes_pdfs_and_writes_reports(tmp_path: Path) -> None:
     assert payload["totals"]["files_found"] == 1
     assert payload["totals"]["pages_removed_total"] == 1
     assert payload["files"][0]["status"] == "edited"
+    assert "pypdfium2_version" in payload

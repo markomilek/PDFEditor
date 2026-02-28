@@ -15,6 +15,13 @@ class RunConfig:
     path: str
     out: str
     report_dir: str
+    mode: str
+    effective_mode: str
+    render_dpi: int
+    ink_threshold: float
+    background: str
+    effective_background: str
+    render_sample: str
     recursive: bool
     write_when_unchanged: bool
     treat_annotations_as_empty: bool
@@ -70,6 +77,7 @@ class RunResult:
     host: str
     python_version: str
     pypdf_version: str
+    pypdfium2_version: str | None
     config: RunConfig
     files: list[FileResult]
     totals: dict[str, int]

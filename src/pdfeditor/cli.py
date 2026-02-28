@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 from typing import Sequence
 
+from pdfeditor.detect_render import is_render_backend_available
 from pdfeditor.models import RunConfig
 from pdfeditor.processor import process_pdf
 from pdfeditor.reporting import build_run_result, write_run_reports
@@ -27,6 +28,36 @@ def build_parser() -> argparse.ArgumentParser:
         "--report-dir",
         default=None,
         help="Directory for JSON and text reports. Defaults to --path.",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("structural", "render", "both"),
+        default="both",
+        help="Empty-page detection mode. Defaults to both.",
+    )
+    parser.add_argument(
+        "--render-dpi",
+        type=int,
+        default=72,
+        help="DPI used for rendering-based detection.",
+    )
+    parser.add_argument(
+        "--ink-threshold",
+        type=float,
+        default=0.0005,
+        help="Fraction of non-background pixels required to treat a page as non-empty.",
+    )
+    parser.add_argument(
+        "--background",
+        choices=("white", "auto"),
+        default="white",
+        help="Background assumption for render detection. 'auto' currently falls back to white.",
+    )
+    parser.add_argument(
+        "--render-sample",
+        choices=("all", "center"),
+        default="all",
+        help="Region of the rendered page used for ink sampling.",
     )
     parser.add_argument(
         "--recursive",
@@ -65,10 +96,34 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     out_dir = Path(args.out) if args.out is not None else scan_path
     report_dir = Path(args.report_dir) if args.report_dir is not None else scan_path
 
+    run_warnings: list[str] = []
+    run_errors: list[str] = []
+    effective_mode = args.mode
+    if args.background == "auto":
+        run_warnings.append("Background mode 'auto' is not implemented yet; using white.")
+    effective_background = "white"
+
+    render_available = is_render_backend_available()
+    if args.mode == "render" and not render_available:
+        run_errors.append("Render mode requires optional dependency 'pypdfium2'.")
+    elif args.mode == "both" and not render_available:
+        run_warnings.append(
+            "Render mode requested via --mode both, but pypdfium2 is unavailable; "
+            "falling back to structural-only detection."
+        )
+        effective_mode = "structural"
+
     config = RunConfig(
         path=str(scan_path),
         out=str(out_dir),
         report_dir=str(report_dir),
+        mode=str(args.mode),
+        effective_mode=effective_mode,
+        render_dpi=int(args.render_dpi),
+        ink_threshold=float(args.ink_threshold),
+        background=str(args.background),
+        effective_background=effective_background,
+        render_sample=str(args.render_sample),
         recursive=bool(args.recursive),
         write_when_unchanged=bool(args.write_when_unchanged),
         treat_annotations_as_empty=bool(args.treat_annotations_as_empty),
@@ -77,13 +132,13 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     )
 
     files = []
-    run_warnings: list[str] = []
-    run_errors: list[str] = []
 
     report_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if not scan_path.exists() or not scan_path.is_dir():
+    if run_errors:
+        pass
+    elif not scan_path.exists() or not scan_path.is_dir():
         run_errors.append(f"Scan path is not a directory: {scan_path}")
     else:
         for pdf_path in discover_pdfs(scan_path, recursive=config.recursive):
@@ -103,6 +158,8 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     )
     json_path, txt_path = write_run_reports(run_result=run_result, report_dir=report_dir)
 
+    for error in run_errors:
+        print(f"pdfeditor: error: {error}")
     print(f"pdfeditor: processed {len(files)} file(s)")
     print(f"pdfeditor: reports written to {json_path} and {txt_path}")
 
