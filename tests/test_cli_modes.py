@@ -22,6 +22,12 @@ def test_cli_parses_render_mode_arguments() -> None:
             "auto",
             "--render-sample",
             "center",
+            "--white-threshold",
+            "245",
+            "--center-margin",
+            "0.08",
+            "--debug-pypdf-xref",
+            "--debug-render",
         ]
     )
 
@@ -30,6 +36,44 @@ def test_cli_parses_render_mode_arguments() -> None:
     assert args.ink_threshold == 0.01
     assert args.background == "auto"
     assert args.render_sample == "center"
+    assert args.white_threshold == 245
+    assert args.center_margin == 0.08
+    assert args.debug_pypdf_xref is True
+    assert args.debug_render is True
+
+
+def test_cli_uses_white_threshold_default_240() -> None:
+    args = build_parser().parse_args([])
+
+    assert args.white_threshold == 240
+
+
+def test_cli_strict_xref_implies_debug_capture_in_report(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    input_dir = tmp_path / "input"
+    report_dir = tmp_path / "reports"
+    input_dir.mkdir()
+
+    monkeypatch.setattr("pdfeditor.cli.is_render_backend_available", lambda: False)
+
+    exit_code = run_cli(
+        [
+            "--mode",
+            "render",
+            "--strict-xref",
+            "--path",
+            str(input_dir),
+            "--report-dir",
+            str(report_dir),
+        ]
+    )
+
+    assert exit_code == 2
+    payload = json.loads(next(report_dir.glob("run_report_*.json")).read_text(encoding="utf-8"))
+    assert payload["config"]["strict_xref"] is True
+    assert payload["config"]["debug_pypdf_xref"] is True
 
 
 def test_cli_both_mode_falls_back_to_structural_when_render_backend_missing(

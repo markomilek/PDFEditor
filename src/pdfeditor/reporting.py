@@ -77,6 +77,7 @@ def _build_totals(files: list[FileResult]) -> dict[str, int]:
         "structural_empty_pages": 0,
         "render_empty_pages": 0,
         "both_empty_pages": 0,
+        "pypdf_warnings_total": 0,
     }
     for file_result in files:
         totals["structural_empty_pages"] += file_result.decisions_summary.get(
@@ -88,6 +89,7 @@ def _build_totals(files: list[FileResult]) -> dict[str, int]:
             0,
         )
         totals["both_empty_pages"] += file_result.decisions_summary.get("both_empty_pages", 0)
+        totals["pypdf_warnings_total"] += file_result.pypdf_warnings_count
     return totals
 
 
@@ -124,11 +126,16 @@ def _text_report(run_result: RunResult) -> str:
         f"  background={run_result.config.background}",
         f"  effective_background={run_result.config.effective_background}",
         f"  render_sample={run_result.config.render_sample}",
+        f"  white_threshold={run_result.config.white_threshold}",
+        f"  center_margin={run_result.config.center_margin}",
         f"  recursive={run_result.config.recursive}",
         f"  write_when_unchanged={run_result.config.write_when_unchanged}",
         f"  treat_annotations_as_empty={run_result.config.treat_annotations_as_empty}",
         f"  dry_run={run_result.config.dry_run}",
         f"  debug_structural={run_result.config.debug_structural}",
+        f"  debug_pypdf_xref={run_result.config.debug_pypdf_xref}",
+        f"  strict_xref={run_result.config.strict_xref}",
+        f"  debug_render={run_result.config.debug_render}",
         f"  verbose={run_result.config.verbose}",
         "",
         "Detection Summary:",
@@ -164,10 +171,15 @@ def _text_report(run_result: RunResult) -> str:
                 f"  pages_output={file_result.pages_output}",
                 f"  timings={file_result.timings}",
                 f"  decisions_summary={file_result.decisions_summary}",
+                f"  pypdf_warnings_count={file_result.pypdf_warnings_count}",
             ]
         )
         if file_result.structural_debug_path:
             lines.append(f"  structural_debug={file_result.structural_debug_path}")
+        if file_result.pypdf_warnings_path:
+            lines.append(f"  pypdf_warnings_debug={file_result.pypdf_warnings_path}")
+        if file_result.render_debug_path:
+            lines.append(f"  render_debug={file_result.render_debug_path}")
         if file_result.warnings:
             lines.extend(f"  warning: {warning}" for warning in file_result.warnings)
         if file_result.errors:

@@ -32,11 +32,16 @@ def test_process_pdf_writes_structural_debug_artifact(tmp_path: Path) -> None:
         background="white",
         effective_background="white",
         render_sample="all",
+        white_threshold=250,
+        center_margin=0.05,
         recursive=False,
         write_when_unchanged=False,
         treat_annotations_as_empty=True,
         dry_run=False,
         debug_structural=True,
+        debug_pypdf_xref=False,
+        strict_xref=False,
+        debug_render=False,
         verbose=False,
     )
 

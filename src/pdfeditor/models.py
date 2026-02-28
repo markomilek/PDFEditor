@@ -22,11 +22,16 @@ class RunConfig:
     background: str
     effective_background: str
     render_sample: str
+    white_threshold: int
+    center_margin: float
     recursive: bool
     write_when_unchanged: bool
     treat_annotations_as_empty: bool
     dry_run: bool
     debug_structural: bool
+    debug_pypdf_xref: bool
+    strict_xref: bool
+    debug_render: bool
     verbose: bool
 
 
@@ -64,6 +69,9 @@ class FileResult:
     decisions_summary: dict[str, int]
     page_decisions: list[PageDecision]
     structural_debug_path: str | None
+    pypdf_warnings_count: int
+    pypdf_warnings_path: str | None
+    render_debug_path: str | None
     warnings: list[str]
     errors: list[str]
     timings: dict[str, float]

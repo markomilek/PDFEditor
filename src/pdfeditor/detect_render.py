@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from pdfeditor.models import JSONValue, PageDecision
 
@@ -36,6 +36,9 @@ def detect_empty_pages_render(
     ink_threshold: float,
     sample: str = "all",
     background: str = "white",
+    white_threshold: int = 240,
+    center_margin: float = 0.05,
+    debug_sink: Callable[[dict[str, JSONValue]], None] | None = None,
 ) -> list[PageDecision]:
     """Render each page and classify it by ink ratio against a white background."""
     try:
@@ -56,12 +59,27 @@ def detect_empty_pages_render(
             bitmap = None
             try:
                 bitmap = page.render(scale=scale)
-                pixel_count, ink_ratio = _measure_ink_ratio(
+                diagnostics = _measure_ink_ratio(
                     bitmap=bitmap,
                     sample=sample,
                     background=effective_background,
+                    white_threshold=white_threshold,
+                    center_margin=center_margin,
                 )
+                pixel_count = int(diagnostics["total_pixels_sampled"])
+                ink_ratio = float(diagnostics["ink_ratio"])
                 is_empty = ink_ratio < ink_threshold
+                if debug_sink is not None:
+                    debug_sink(
+                        {
+                            "page_index_0": page_index,
+                            "page_index_1": page_index + 1,
+                            "ink_ratio": ink_ratio,
+                            "is_empty_by_render": is_empty,
+                            "reason": "ink_below_threshold" if is_empty else "ink_above_threshold",
+                            **diagnostics,
+                        }
+                    )
                 decisions.append(
                     PageDecision(
                         page_index=page_index,
@@ -73,10 +91,27 @@ def detect_empty_pages_render(
                             "pixel_count": pixel_count,
                             "sample": sample,
                             "background": effective_background,
+                            "white_threshold": white_threshold,
                         },
                     )
                 )
             except Exception as exc:
+                if debug_sink is not None:
+                    debug_sink(
+                        {
+                            "page_index_0": page_index,
+                            "page_index_1": page_index + 1,
+                            "ink_ratio": None,
+                            "is_empty_by_render": False,
+                            "reason": "render_failed",
+                            "dpi": dpi,
+                            "sample": sample,
+                            "background": effective_background,
+                            "white_threshold": white_threshold,
+                            "center_margin": center_margin,
+                            "error": str(exc),
+                        }
+                    )
                 decisions.append(
                     PageDecision(
                         page_index=page_index,
@@ -88,6 +123,7 @@ def detect_empty_pages_render(
                             "pixel_count": 0,
                             "sample": sample,
                             "background": effective_background,
+                            "white_threshold": white_threshold,
                             "error": str(exc),
                         },
                     )
@@ -103,7 +139,13 @@ def detect_empty_pages_render(
     return decisions
 
 
-def _measure_ink_ratio(bitmap: Any, sample: str, background: str) -> tuple[int, float]:
+def _measure_ink_ratio(
+    bitmap: Any,
+    sample: str,
+    background: str,
+    white_threshold: int,
+    center_margin: float,
+) -> dict[str, JSONValue]:
     if background != "white":
         raise ValueError("Only white background sampling is implemented.")
 
@@ -115,37 +157,105 @@ def _measure_ink_ratio(bitmap: Any, sample: str, background: str) -> tuple[int, 
         raise ValueError("Bitmap must expose at least three color channels.")
 
     raw = bytes(bitmap.buffer)
-    start_x, end_x, start_y, end_y = _sample_bounds(width, height, sample)
+    start_x, end_x, start_y, end_y = _sample_bounds(width, height, sample, center_margin)
     pixel_count = max(0, end_x - start_x) * max(0, end_y - start_y)
     if pixel_count == 0:
-        return 0, 0.0
+        return {
+            "center_margin": center_margin,
+            "height_px": height,
+            "ink_ratio": 0.0,
+            "max_alpha": None,
+            "max_rgb": [0, 0, 0],
+            "min_alpha": None,
+            "min_rgb": [255, 255, 255],
+            "nonwhite_pixels": 0,
+            "pixel_format": _pixel_format(channels),
+            "sample": sample,
+            "sample_box_px": [start_x, start_y, end_x, end_y],
+            "total_pixels_sampled": 0,
+            "white_threshold": white_threshold,
+            "width_px": width,
+        }
 
     non_background_pixels = 0
+    min_rgb = [255, 255, 255]
+    max_rgb = [0, 0, 0]
+    min_alpha: int | None = 255 if channels >= 4 else None
+    max_alpha: int | None = 0 if channels >= 4 else None
     for y in range(start_y, end_y):
         row_offset = y * stride
         for x in range(start_x, end_x):
             offset = row_offset + x * channels
-            if not _pixel_is_white(raw, offset, channels):
+            blue = raw[offset]
+            green = raw[offset + 1]
+            red = raw[offset + 2]
+            min_rgb[0] = min(min_rgb[0], red)
+            min_rgb[1] = min(min_rgb[1], green)
+            min_rgb[2] = min(min_rgb[2], blue)
+            max_rgb[0] = max(max_rgb[0], red)
+            max_rgb[1] = max(max_rgb[1], green)
+            max_rgb[2] = max(max_rgb[2], blue)
+            alpha = raw[offset + 3] if channels >= 4 else None
+            if alpha is not None and min_alpha is not None and max_alpha is not None:
+                min_alpha = min(min_alpha, alpha)
+                max_alpha = max(max_alpha, alpha)
+            if not _pixel_is_white(
+                red=red,
+                green=green,
+                blue=blue,
+                alpha=alpha,
+                white_threshold=white_threshold,
+            ):
                 non_background_pixels += 1
 
-    return pixel_count, non_background_pixels / pixel_count
+    return {
+        "center_margin": center_margin,
+        "height_px": height,
+        "ink_ratio": non_background_pixels / pixel_count,
+        "max_alpha": max_alpha,
+        "max_rgb": max_rgb,
+        "min_alpha": min_alpha,
+        "min_rgb": min_rgb,
+        "nonwhite_pixels": non_background_pixels,
+        "pixel_format": _pixel_format(channels),
+        "sample": sample,
+        "sample_box_px": [start_x, start_y, end_x, end_y],
+        "total_pixels_sampled": pixel_count,
+        "white_threshold": white_threshold,
+        "width_px": width,
+    }
 
 
-def _sample_bounds(width: int, height: int, sample: str) -> tuple[int, int, int, int]:
+def _sample_bounds(
+    width: int,
+    height: int,
+    sample: str,
+    center_margin: float,
+) -> tuple[int, int, int, int]:
     if sample == "all":
         return 0, width, 0, height
     if sample == "center":
-        margin_x = int(width * 0.05)
-        margin_y = int(height * 0.05)
+        margin_x = int(width * center_margin)
+        margin_y = int(height * center_margin)
         return margin_x, max(margin_x, width - margin_x), margin_y, max(margin_y, height - margin_y)
     raise ValueError(f"Unsupported render sample mode: {sample}")
 
 
-def _pixel_is_white(raw: bytes, offset: int, channels: int) -> bool:
-    blue = raw[offset]
-    green = raw[offset + 1]
-    red = raw[offset + 2]
-    if channels >= 4:
-        alpha = raw[offset + 3]
-        return red == 255 and green == 255 and blue == 255 and alpha in {0, 255}
-    return red == 255 and green == 255 and blue == 255
+def _pixel_is_white(
+    red: int,
+    green: int,
+    blue: int,
+    alpha: int | None,
+    white_threshold: int,
+) -> bool:
+    if alpha == 0:
+        return True
+    return red >= white_threshold and green >= white_threshold and blue >= white_threshold
+
+
+def _pixel_format(channels: int) -> str:
+    if channels == 4:
+        return "BGRx_or_BGRA"
+    if channels == 3:
+        return "BGR"
+    return f"{channels}_channels"

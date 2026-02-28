@@ -44,6 +44,19 @@ pdfeditor --path uat/input --out uat/output --report-dir uat/reports --debug-str
 
 Debug artifacts are written into `uat/reports/` as `structural_debug_<input_stem>_<timestamp>.json`.
 
+### Warning and Render Debug
+
+To capture `pypdf` xref warnings and render diagnostics:
+
+```bash
+pdfeditor --path uat/input --out uat/output --report-dir uat/reports --mode both --debug-pypdf-xref --debug-render --white-threshold 240 --render-sample center --verbose
+```
+
+Debug artifacts are written into `uat/reports/` as:
+
+* `pypdf_warnings_<input_stem>_<timestamp>.json`
+* `render_debug_<input_stem>_<timestamp>.json`
+
 ## Suggested Test PDFs
 
 Include representative real-world samples such as:

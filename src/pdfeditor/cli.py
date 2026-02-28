@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 import re
 from typing import Sequence
@@ -60,6 +61,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Region of the rendered page used for ink sampling.",
     )
     parser.add_argument(
+        "--white-threshold",
+        type=int,
+        default=240,
+        help="Treat pixels with R,G,B values at or above this threshold as white.",
+    )
+    parser.add_argument(
+        "--center-margin",
+        type=float,
+        default=0.05,
+        help="Margin fraction removed from each side when --render-sample center is used.",
+    )
+    parser.add_argument(
         "--recursive",
         action="store_true",
         help="Scan subdirectories recursively for PDF files.",
@@ -86,6 +99,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write per-page structural detector debug JSON files to --report-dir.",
     )
     parser.add_argument(
+        "--debug-pypdf-xref",
+        action="store_true",
+        help="Capture pypdf warning events to a per-file JSON debug artifact.",
+    )
+    parser.add_argument(
+        "--strict-xref",
+        action="store_true",
+        help="Fail a file when any pypdf warning is captured during processing.",
+    )
+    parser.add_argument(
+        "--debug-render",
+        action="store_true",
+        help="Write per-page render diagnostics JSON files to --report-dir.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print per-file processing details.",
@@ -96,6 +124,8 @@ def build_parser() -> argparse.ArgumentParser:
 def run_cli(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
     args = build_parser().parse_args(argv)
+    debug_pypdf_xref = bool(args.debug_pypdf_xref or args.strict_xref)
+    _configure_pypdf_logging(capture_warnings=debug_pypdf_xref)
 
     scan_path = Path(args.path)
     out_dir = Path(args.out) if args.out is not None else scan_path
@@ -129,11 +159,16 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         background=str(args.background),
         effective_background=effective_background,
         render_sample=str(args.render_sample),
+        white_threshold=int(args.white_threshold),
+        center_margin=float(args.center_margin),
         recursive=bool(args.recursive),
         write_when_unchanged=bool(args.write_when_unchanged),
         treat_annotations_as_empty=bool(args.treat_annotations_as_empty),
         dry_run=bool(args.dry_run),
         debug_structural=bool(args.debug_structural),
+        debug_pypdf_xref=debug_pypdf_xref,
+        strict_xref=bool(args.strict_xref),
+        debug_render=bool(args.debug_render),
         verbose=bool(args.verbose),
     )
 
@@ -157,6 +192,10 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
                 )
                 if file_result.structural_debug_path is not None:
                     print(f"wrote structural debug to {file_result.structural_debug_path}")
+                if file_result.pypdf_warnings_path is not None:
+                    print(f"wrote pypdf warnings debug to {file_result.pypdf_warnings_path}")
+                if file_result.render_debug_path is not None:
+                    print(f"wrote render debug to {file_result.render_debug_path}")
 
     run_result = build_run_result(
         config=config,
@@ -195,3 +234,12 @@ def discover_pdfs(path: Path, recursive: bool) -> list[Path]:
             continue
         candidates.append(item)
     return candidates
+
+
+def _configure_pypdf_logging(capture_warnings: bool) -> None:
+    """Suppress pypdf warning spam unless explicit capture is enabled."""
+    logger = logging.getLogger("pypdf")
+    logger.setLevel(logging.WARNING if capture_warnings else logging.ERROR)
+    logger.propagate = False
+    if not any(isinstance(handler, logging.NullHandler) for handler in logger.handlers):
+        logger.addHandler(logging.NullHandler())

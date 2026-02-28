@@ -125,6 +125,17 @@ Current coverage:
 * verifies that a rendered blank page is classified empty
 * verifies that a rendered text page is classified non-empty
 
+### `test_render_debug_output.py`
+
+Optional render-debug artifact coverage.
+
+Current coverage:
+
+* skipped automatically when `pypdfium2` is not installed
+* runs `process_pdf()` with render debugging enabled
+* verifies that a separate render debug JSON artifact is written
+* verifies that the artifact contains per-page render statistics and `white_threshold`
+
 ### `test_structural_debug_output.py`
 
 Structural debug artifact coverage.
@@ -135,6 +146,16 @@ Current coverage:
 * verifies that a separate structural debug JSON artifact is written
 * verifies that the artifact contains per-page records and operator summaries
 * ensures the debug path is carried back in the structured file result
+
+### `test_pypdf_warning_capture.py`
+
+Synthetic `pypdf` warning capture coverage.
+
+Current coverage:
+
+* verifies that warnings logged under the `pypdf` logger are captured into structured events
+* verifies that captured events contain a message and stack trace
+* verifies the strict helper raises when warnings are present
 
 ## Test Support Files
 
@@ -209,3 +230,22 @@ When enabled:
 * the structural detector emits a separate per-file JSON artifact in the report directory
 * the main run report includes the path to that artifact
 * each page record includes content-stream metadata, capped stream previews, and an operator summary derived from `pypdf` parsing
+
+## pypdf Warning Debugging
+
+The CLI also supports `--debug-pypdf-xref` and `--strict-xref`.
+
+When enabled:
+
+* `pypdf` warnings are captured into a separate per-file JSON artifact instead of being printed to the console
+* `--strict-xref` treats any captured `pypdf` warning as a per-file failure
+
+## Render Debugging
+
+The CLI also supports `--debug-render`, `--white-threshold`, and `--center-margin`.
+
+When enabled:
+
+* the render detector emits a separate per-file JSON artifact with per-page pixel statistics
+* `white_threshold` controls how close to white a rendered pixel may be before it counts as background
+* render debug tests are skipped automatically when `pypdfium2` is unavailable

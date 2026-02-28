@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from datetime import datetime
 import json
 from pathlib import Path
@@ -12,6 +13,10 @@ from pypdf import PdfReader
 from pdfeditor.detect_empty import detect_page_decisions
 from pdfeditor.detect_render import detect_empty_pages_render
 from pdfeditor.models import FileResult, JSONValue, PageDecision, RunConfig
+from pdfeditor.pypdf_debug import (
+    PyPdfWarningCollector,
+    capture_pypdf_warnings,
+)
 from pdfeditor.rewrite import rewrite_pdf
 
 
@@ -23,62 +28,125 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
     run_start = perf_counter()
     structural_debug_records: list[dict[str, JSONValue]] = []
     structural_debug_path: Path | None = None
+    render_debug_records: list[dict[str, JSONValue]] = []
+    render_debug_path: Path | None = None
+    warning_collector = PyPdfWarningCollector()
+    pypdf_warnings_path: Path | None = None
+    capture_enabled = config.debug_pypdf_xref or config.strict_xref
+    warning_context = (
+        capture_pypdf_warnings(warning_collector)
+        if capture_enabled
+        else nullcontext()
+    )
 
     try:
-        reader = PdfReader(str(input_path))
-        if reader.is_encrypted:
-            raise ValueError("encrypted")
+        with warning_context:
+            reader = PdfReader(str(input_path))
+            if reader.is_encrypted:
+                raise ValueError("encrypted")
+
+            pages_original = len(reader.pages)
+
+            detect_start = perf_counter()
+            structural_decisions = detect_page_decisions(
+                reader=reader,
+                treat_annotations_as_empty=config.treat_annotations_as_empty,
+                debug_sink=structural_debug_records.append if config.debug_structural else None,
+            )
+            render_decisions: list[PageDecision] | None = None
+            if config.effective_mode in {"render", "both"}:
+                render_decisions = detect_empty_pages_render(
+                    input_path=input_path,
+                    dpi=config.render_dpi,
+                    ink_threshold=config.ink_threshold,
+                    sample=config.render_sample,
+                    background=config.effective_background,
+                    white_threshold=config.white_threshold,
+                    center_margin=config.center_margin,
+                    debug_sink=render_debug_records.append if config.debug_render else None,
+                )
+            decisions = _combine_decisions(
+                structural_decisions=structural_decisions,
+                render_decisions=render_decisions,
+                mode=config.effective_mode,
+            )
+            timings["detection_seconds"] = round(perf_counter() - detect_start, 6)
     except Exception as exc:
         status_error = str(exc)
         if status_error == "encrypted":
             errors.append("encrypted")
         else:
             errors.append(f"read_error: {exc}")
+        pages_original = 0
+        decisions = []
         timings["total_seconds"] = round(perf_counter() - run_start, 6)
+        if capture_enabled:
+            pypdf_warnings_path = _write_pypdf_warnings_artifact(
+                input_path=input_path,
+                report_dir=Path(config.report_dir),
+                collector=warning_collector,
+            )
         return FileResult(
             input_path=str(input_path),
             output_path=None,
             status="failed",
-            pages_original=0,
+            pages_original=pages_original,
             pages_removed=0,
             pages_output=0,
             decisions_summary={"empty_pages": 0, "non_empty_pages": 0},
-            page_decisions=[],
+            page_decisions=decisions,
             structural_debug_path=None,
+            pypdf_warnings_count=len(warning_collector.events),
+            pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
+            render_debug_path=None,
             warnings=warnings,
             errors=errors,
             timings=timings,
         )
-
-    pages_original = len(reader.pages)
-
-    detect_start = perf_counter()
-    structural_decisions = detect_page_decisions(
-        reader=reader,
-        treat_annotations_as_empty=config.treat_annotations_as_empty,
-        debug_sink=structural_debug_records.append if config.debug_structural else None,
-    )
-    render_decisions: list[PageDecision] | None = None
-    if config.effective_mode in {"render", "both"}:
-        render_decisions = detect_empty_pages_render(
-            input_path=input_path,
-            dpi=config.render_dpi,
-            ink_threshold=config.ink_threshold,
-            sample=config.render_sample,
-            background=config.effective_background,
-        )
-    decisions = _combine_decisions(
-        structural_decisions=structural_decisions,
-        render_decisions=render_decisions,
-        mode=config.effective_mode,
-    )
-    timings["detection_seconds"] = round(perf_counter() - detect_start, 6)
 
     if config.debug_structural:
         structural_debug_path = _write_structural_debug_artifact(
             input_path=input_path,
             report_dir=Path(config.report_dir),
             records=structural_debug_records,
+        )
+    if config.debug_render and config.effective_mode in {"render", "both"}:
+        render_debug_path = _write_render_debug_artifact(
+            input_path=input_path,
+            report_dir=Path(config.report_dir),
+            records=render_debug_records,
+            config=config,
+        )
+    if capture_enabled:
+        pypdf_warnings_path = _write_pypdf_warnings_artifact(
+            input_path=input_path,
+            report_dir=Path(config.report_dir),
+            collector=warning_collector,
+        )
+
+    if config.strict_xref and warning_collector.events:
+        errors.append("pypdf_xref_warning")
+        if pypdf_warnings_path is not None:
+            errors.append(
+                f"pypdf warnings were captured; see {pypdf_warnings_path}"
+            )
+        timings["total_seconds"] = round(perf_counter() - run_start, 6)
+        return FileResult(
+            input_path=str(input_path),
+            output_path=None,
+            status="failed",
+            pages_original=pages_original,
+            pages_removed=0,
+            pages_output=0,
+            decisions_summary=_summarize_decisions(decisions),
+            page_decisions=decisions,
+            structural_debug_path=str(structural_debug_path) if structural_debug_path is not None else None,
+            pypdf_warnings_count=len(warning_collector.events),
+            pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
+            render_debug_path=str(render_debug_path) if render_debug_path is not None else None,
+            warnings=warnings,
+            errors=errors,
+            timings=timings,
         )
 
     pages_to_keep = [
@@ -130,6 +198,9 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
         decisions_summary=_summarize_decisions(decisions),
         page_decisions=decisions,
         structural_debug_path=str(structural_debug_path) if structural_debug_path is not None else None,
+        pypdf_warnings_count=len(warning_collector.events),
+        pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
+        render_debug_path=str(render_debug_path) if render_debug_path is not None else None,
         warnings=warnings,
         errors=errors,
         timings=timings,
@@ -279,6 +350,59 @@ def _write_structural_debug_artifact(
     payload = {
         "input_path": str(input_path),
         "pages": records,
+    }
+    candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return candidate
+
+
+def _write_pypdf_warnings_artifact(
+    input_path: Path,
+    report_dir: Path,
+    collector: PyPdfWarningCollector,
+) -> Path:
+    """Write captured pypdf warnings for one processed PDF."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    candidate = report_dir / f"pypdf_warnings_{input_path.stem}_{timestamp}.json"
+    suffix = 1
+    while candidate.exists():
+        candidate = report_dir / f"pypdf_warnings_{input_path.stem}_{timestamp}_{suffix}.json"
+        suffix += 1
+
+    payload = {
+        "input_path": str(input_path),
+        **collector.to_dict(),
+    }
+    candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return candidate
+
+
+def _write_render_debug_artifact(
+    input_path: Path,
+    report_dir: Path,
+    records: list[dict[str, JSONValue]],
+    config: RunConfig,
+) -> Path:
+    """Write per-page render debugging information for one processed PDF."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    candidate = report_dir / f"render_debug_{input_path.stem}_{timestamp}.json"
+    suffix = 1
+    while candidate.exists():
+        candidate = report_dir / f"render_debug_{input_path.stem}_{timestamp}_{suffix}.json"
+        suffix += 1
+
+    payload = {
+        "input_path": str(input_path),
+        "render_parameters": {
+            "dpi": config.render_dpi,
+            "ink_threshold": config.ink_threshold,
+            "white_threshold": config.white_threshold,
+            "sample": config.render_sample,
+            "center_margin": config.center_margin,
+            "background": config.effective_background,
+        },
+        "per_page": records,
     }
     candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return candidate
