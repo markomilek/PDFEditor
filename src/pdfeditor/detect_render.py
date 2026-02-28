@@ -34,10 +34,9 @@ def detect_empty_pages_render(
     input_path: Path,
     dpi: int,
     ink_threshold: float,
-    sample: str = "all",
     background: str = "white",
+    sample_margin_inches: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0),
     white_threshold: int = 240,
-    center_margin: float = 0.05,
     debug_sink: Callable[[dict[str, JSONValue]], None] | None = None,
 ) -> list[PageDecision]:
     """Render each page and classify it by ink ratio against a white background."""
@@ -61,14 +60,20 @@ def detect_empty_pages_render(
                 bitmap = page.render(scale=scale)
                 diagnostics = _measure_ink_ratio(
                     bitmap=bitmap,
-                    sample=sample,
                     background=effective_background,
+                    dpi=dpi,
+                    sample_margin_inches=sample_margin_inches,
                     white_threshold=white_threshold,
-                    center_margin=center_margin,
                 )
-                pixel_count = int(diagnostics["total_pixels_sampled"])
+                pixel_count = int(diagnostics["sampled_pixel_count"])
                 ink_ratio = float(diagnostics["ink_ratio"])
-                is_empty = ink_ratio < ink_threshold
+                invalid_sample_area = bool(diagnostics["invalid_sample_area"])
+                is_empty = (ink_ratio < ink_threshold) if not invalid_sample_area else False
+                reason = (
+                    "invalid_sample_area"
+                    if invalid_sample_area
+                    else "ink_below_threshold" if is_empty else "ink_above_threshold"
+                )
                 if debug_sink is not None:
                     debug_sink(
                         {
@@ -76,7 +81,7 @@ def detect_empty_pages_render(
                             "page_index_1": page_index + 1,
                             "ink_ratio": ink_ratio,
                             "is_empty_by_render": is_empty,
-                            "reason": "ink_below_threshold" if is_empty else "ink_above_threshold",
+                            "reason": reason,
                             **diagnostics,
                         }
                     )
@@ -84,14 +89,16 @@ def detect_empty_pages_render(
                     PageDecision(
                         page_index=page_index,
                         is_empty=is_empty,
-                        reason="ink_below_threshold" if is_empty else "ink_above_threshold",
+                        reason=reason,
                         details={
                             "dpi": dpi,
                             "ink_ratio": ink_ratio,
                             "pixel_count": pixel_count,
-                            "sample": sample,
+                            "sample_margin_inches": list(sample_margin_inches),
+                            "sample_box_px": diagnostics["sample_box_px"],
                             "background": effective_background,
                             "white_threshold": white_threshold,
+                            "invalid_sample_area": invalid_sample_area,
                         },
                     )
                 )
@@ -105,10 +112,9 @@ def detect_empty_pages_render(
                             "is_empty_by_render": False,
                             "reason": "render_failed",
                             "dpi": dpi,
-                            "sample": sample,
+                            "sample_margin_inches": list(sample_margin_inches),
                             "background": effective_background,
                             "white_threshold": white_threshold,
-                            "center_margin": center_margin,
                             "error": str(exc),
                         }
                     )
@@ -121,7 +127,7 @@ def detect_empty_pages_render(
                             "dpi": dpi,
                             "ink_ratio": None,
                             "pixel_count": 0,
-                            "sample": sample,
+                            "sample_margin_inches": list(sample_margin_inches),
                             "background": effective_background,
                             "white_threshold": white_threshold,
                             "error": str(exc),
@@ -141,10 +147,10 @@ def detect_empty_pages_render(
 
 def _measure_ink_ratio(
     bitmap: Any,
-    sample: str,
     background: str,
+    dpi: int,
+    sample_margin_inches: tuple[float, float, float, float],
     white_threshold: int,
-    center_margin: float,
 ) -> dict[str, JSONValue]:
     if background != "white":
         raise ValueError("Only white background sampling is implemented.")
@@ -157,22 +163,27 @@ def _measure_ink_ratio(
         raise ValueError("Bitmap must expose at least three color channels.")
 
     raw = bytes(bitmap.buffer)
-    start_x, end_x, start_y, end_y = _sample_bounds(width, height, sample, center_margin)
+    start_x, end_x, start_y, end_y = _sample_bounds(
+        width=width,
+        height=height,
+        dpi=dpi,
+        sample_margin_inches=sample_margin_inches,
+    )
     pixel_count = max(0, end_x - start_x) * max(0, end_y - start_y)
     if pixel_count == 0:
         return {
-            "center_margin": center_margin,
             "height_px": height,
             "ink_ratio": 0.0,
+            "invalid_sample_area": True,
             "max_alpha": None,
             "max_rgb": [0, 0, 0],
             "min_alpha": None,
             "min_rgb": [255, 255, 255],
-            "nonwhite_pixels": 0,
+            "nonwhite_pixel_count": 0,
             "pixel_format": _pixel_format(channels),
-            "sample": sample,
+            "sample_margin_inches": list(sample_margin_inches),
             "sample_box_px": [start_x, start_y, end_x, end_y],
-            "total_pixels_sampled": 0,
+            "sampled_pixel_count": 0,
             "white_threshold": white_threshold,
             "width_px": width,
         }
@@ -209,18 +220,18 @@ def _measure_ink_ratio(
                 non_background_pixels += 1
 
     return {
-        "center_margin": center_margin,
         "height_px": height,
         "ink_ratio": non_background_pixels / pixel_count,
+        "invalid_sample_area": False,
         "max_alpha": max_alpha,
         "max_rgb": max_rgb,
         "min_alpha": min_alpha,
         "min_rgb": min_rgb,
-        "nonwhite_pixels": non_background_pixels,
+        "nonwhite_pixel_count": non_background_pixels,
         "pixel_format": _pixel_format(channels),
-        "sample": sample,
+        "sample_margin_inches": list(sample_margin_inches),
         "sample_box_px": [start_x, start_y, end_x, end_y],
-        "total_pixels_sampled": pixel_count,
+        "sampled_pixel_count": pixel_count,
         "white_threshold": white_threshold,
         "width_px": width,
     }
@@ -229,16 +240,19 @@ def _measure_ink_ratio(
 def _sample_bounds(
     width: int,
     height: int,
-    sample: str,
-    center_margin: float,
+    dpi: int,
+    sample_margin_inches: tuple[float, float, float, float],
 ) -> tuple[int, int, int, int]:
-    if sample == "all":
-        return 0, width, 0, height
-    if sample == "center":
-        margin_x = int(width * center_margin)
-        margin_y = int(height * center_margin)
-        return margin_x, max(margin_x, width - margin_x), margin_y, max(margin_y, height - margin_y)
-    raise ValueError(f"Unsupported render sample mode: {sample}")
+    top_in, left_in, right_in, bottom_in = sample_margin_inches
+    top_px = max(0, int(round(top_in * dpi)))
+    left_px = max(0, int(round(left_in * dpi)))
+    right_px = max(0, int(round(right_in * dpi)))
+    bottom_px = max(0, int(round(bottom_in * dpi)))
+    x0 = min(width, left_px)
+    x1 = max(0, width - right_px)
+    y0 = min(height, top_px)
+    y1 = max(0, height - bottom_px)
+    return x0, x1, y0, y1
 
 
 def _pixel_is_white(

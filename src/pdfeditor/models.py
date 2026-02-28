@@ -21,9 +21,8 @@ class RunConfig:
     ink_threshold: float
     background: str
     effective_background: str
-    render_sample: str
+    render_sample_margin: tuple[float, float, float, float]
     white_threshold: int
-    center_margin: float
     recursive: bool
     write_when_unchanged: bool
     treat_annotations_as_empty: bool

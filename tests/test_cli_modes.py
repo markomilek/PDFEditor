@@ -20,12 +20,10 @@ def test_cli_parses_render_mode_arguments() -> None:
             "0.01",
             "--background",
             "auto",
-            "--render-sample",
-            "center",
+            "--render-sample-margin",
+            "0.5, 0, 0, 1.25",
             "--white-threshold",
             "245",
-            "--center-margin",
-            "0.08",
             "--debug-pypdf-xref",
             "--debug-render",
         ]
@@ -35,9 +33,8 @@ def test_cli_parses_render_mode_arguments() -> None:
     assert args.render_dpi == 96
     assert args.ink_threshold == 0.01
     assert args.background == "auto"
-    assert args.render_sample == "center"
+    assert args.render_sample_margin == (0.5, 0.0, 0.0, 1.25)
     assert args.white_threshold == 245
-    assert args.center_margin == 0.08
     assert args.debug_pypdf_xref is True
     assert args.debug_render is True
 
@@ -45,6 +42,7 @@ def test_cli_parses_render_mode_arguments() -> None:
 def test_cli_uses_white_threshold_default_240() -> None:
     args = build_parser().parse_args([])
 
+    assert args.ink_threshold == 1e-5
     assert args.white_threshold == 240
 
 

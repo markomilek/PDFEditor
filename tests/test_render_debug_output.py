@@ -35,9 +35,8 @@ def test_process_pdf_writes_render_debug_artifact(tmp_path: Path) -> None:
         ink_threshold=0.0005,
         background="white",
         effective_background="white",
-        render_sample="all",
+        render_sample_margin=(0.25, 0.25, 0.25, 0.25),
         white_threshold=250,
-        center_margin=0.05,
         recursive=False,
         write_when_unchanged=False,
         treat_annotations_as_empty=True,
@@ -57,5 +56,8 @@ def test_process_pdf_writes_render_debug_artifact(tmp_path: Path) -> None:
 
     payload = json.loads(debug_path.read_text(encoding="utf-8"))
     assert payload["render_parameters"]["white_threshold"] == 250
+    assert payload["render_parameters"]["render_sample_margin"] == [0.25, 0.25, 0.25, 0.25]
     assert len(payload["per_page"]) == 2
+    assert payload["per_page"][0]["sample_margin_inches"] == [0.25, 0.25, 0.25, 0.25]
+    assert "sample_box_px" in payload["per_page"][0]
     assert payload["per_page"][0]["ink_ratio"] <= payload["per_page"][1]["ink_ratio"]

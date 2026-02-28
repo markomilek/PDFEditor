@@ -49,13 +49,15 @@ Debug artifacts are written into `uat/reports/` as `structural_debug_<input_stem
 To capture `pypdf` xref warnings and render diagnostics:
 
 ```bash
-pdfeditor --path uat/input --out uat/output --report-dir uat/reports --mode both --debug-pypdf-xref --debug-render --white-threshold 240 --render-sample center --verbose
+pdfeditor --path uat/input --out uat/output --report-dir uat/reports --mode both --debug-pypdf-xref --debug-render --white-threshold 240 --render-sample-margin "0,0,0,0" --verbose
 ```
 
 Debug artifacts are written into `uat/reports/` as:
 
 * `pypdf_warnings_<input_stem>_<timestamp>.json`
 * `render_debug_<input_stem>_<timestamp>.json`
+
+`--render-sample-margin` values are inches in `TOP,LEFT,RIGHT,BOTTOM` order.
 
 ## Suggested Test PDFs
 

@@ -94,6 +94,17 @@ Current coverage:
 * verifies `--mode both` falls back to structural-only when `pypdfium2` is unavailable
 * verifies `--mode render` exits with code `2` and writes reports when `pypdfium2` is unavailable
 
+### `test_cli_render_margin_parse.py`
+
+CLI parsing coverage for render body sampling margins.
+
+Current coverage:
+
+* verifies `--render-sample-margin` parses `TOP,LEFT,RIGHT,BOTTOM` values in inches
+* verifies optional spaces are accepted
+* verifies wrong counts fail with exit code `2`
+* verifies negative values fail with exit code `2`
+
 ### `test_wordlike_blank_page.py`
 
 Regression test for Word-like blank pages that still carry font resources.
@@ -134,7 +145,7 @@ Current coverage:
 * skipped automatically when `pypdfium2` is not installed
 * runs `process_pdf()` with render debugging enabled
 * verifies that a separate render debug JSON artifact is written
-* verifies that the artifact contains per-page render statistics and `white_threshold`
+* verifies that the artifact contains per-page render statistics, `white_threshold`, and `sample_margin_inches`
 
 ### `test_structural_debug_output.py`
 
@@ -221,6 +232,12 @@ If `pypdfium2` is unavailable:
 * `render` fails with exit code `2`
 * `both` falls back to structural-only and records a warning
 
+Render sampling always uses a body region defined by `--render-sample-margin "TOP,LEFT,RIGHT,BOTTOM"` in inches.
+
+* `0,0,0,0` samples the full page
+* non-zero margins exclude headers, footers, or side gutters from the ink calculation
+* if margins eliminate the entire sample area, render mode returns `invalid_sample_area` conservatively
+
 ## Structural Debugging
 
 The CLI also supports `--debug-structural`.
@@ -242,10 +259,11 @@ When enabled:
 
 ## Render Debugging
 
-The CLI also supports `--debug-render`, `--white-threshold`, and `--center-margin`.
+The CLI also supports `--debug-render`, `--white-threshold`, and `--render-sample-margin`.
 
 When enabled:
 
 * the render detector emits a separate per-file JSON artifact with per-page pixel statistics
 * `white_threshold` controls how close to white a rendered pixel may be before it counts as background
+* `render-sample-margin` defines the sampled body region in inches from the top, left, right, and bottom edges
 * render debug tests are skipped automatically when `pypdfium2` is unavailable

@@ -45,7 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--ink-threshold",
         type=float,
-        default=0.0005,
+        default=1e-5,
         help="Fraction of non-background pixels required to treat a page as non-empty.",
     )
     parser.add_argument(
@@ -55,22 +55,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Background assumption for render detection. 'auto' currently falls back to white.",
     )
     parser.add_argument(
-        "--render-sample",
-        choices=("all", "center"),
-        default="all",
-        help="Region of the rendered page used for ink sampling.",
+        "--render-sample-margin",
+        type=_parse_render_sample_margin,
+        default=(0.0, 0.0, 0.0, 0.0),
+        help=(
+            "Body sampling margins in inches: TOP,LEFT,RIGHT,BOTTOM. "
+            "Sampling excludes these margins from each edge. "
+            "Use 0,0,0,0 to sample entire page."
+        ),
     )
     parser.add_argument(
         "--white-threshold",
         type=int,
         default=240,
         help="Treat pixels with R,G,B values at or above this threshold as white.",
-    )
-    parser.add_argument(
-        "--center-margin",
-        type=float,
-        default=0.05,
-        help="Margin fraction removed from each side when --render-sample center is used.",
     )
     parser.add_argument(
         "--recursive",
@@ -158,9 +156,8 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         ink_threshold=float(args.ink_threshold),
         background=str(args.background),
         effective_background=effective_background,
-        render_sample=str(args.render_sample),
+        render_sample_margin=tuple(float(value) for value in args.render_sample_margin),
         white_threshold=int(args.white_threshold),
-        center_margin=float(args.center_margin),
         recursive=bool(args.recursive),
         write_when_unchanged=bool(args.write_when_unchanged),
         treat_annotations_as_empty=bool(args.treat_annotations_as_empty),
@@ -243,3 +240,28 @@ def _configure_pypdf_logging(capture_warnings: bool) -> None:
     logger.propagate = False
     if not any(isinstance(handler, logging.NullHandler) for handler in logger.handlers):
         logger.addHandler(logging.NullHandler())
+
+
+def _parse_render_sample_margin(value: str) -> tuple[float, float, float, float]:
+    """Parse TOP,LEFT,RIGHT,BOTTOM sampling margins in inches."""
+    parts = [part.strip() for part in value.split(",")]
+    if len(parts) != 4:
+        raise argparse.ArgumentTypeError(
+            "render sample margin must contain exactly 4 comma-separated values: "
+            "TOP,LEFT,RIGHT,BOTTOM"
+        )
+
+    margins: list[float] = []
+    for part in parts:
+        try:
+            margin = float(part)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(
+                "render sample margin values must be numbers in inches"
+            ) from exc
+        if margin < 0:
+            raise argparse.ArgumentTypeError(
+                "render sample margin values must be >= 0 inches"
+            )
+        margins.append(margin)
+    return tuple(margins)  # type: ignore[return-value]

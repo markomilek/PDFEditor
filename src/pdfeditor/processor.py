@@ -59,10 +59,9 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
                     input_path=input_path,
                     dpi=config.render_dpi,
                     ink_threshold=config.ink_threshold,
-                    sample=config.render_sample,
                     background=config.effective_background,
+                    sample_margin_inches=config.render_sample_margin,
                     white_threshold=config.white_threshold,
-                    center_margin=config.center_margin,
                     debug_sink=render_debug_records.append if config.debug_render else None,
                 )
             decisions = _combine_decisions(
@@ -398,8 +397,7 @@ def _write_render_debug_artifact(
             "dpi": config.render_dpi,
             "ink_threshold": config.ink_threshold,
             "white_threshold": config.white_threshold,
-            "sample": config.render_sample,
-            "center_margin": config.center_margin,
+            "render_sample_margin": list(config.render_sample_margin),
             "background": config.effective_background,
         },
         "per_page": records,

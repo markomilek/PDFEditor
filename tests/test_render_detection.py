@@ -22,8 +22,8 @@ def test_render_detector_flags_blank_page_and_visible_text(tmp_path: Path) -> No
         input_path=pdf_path,
         dpi=72,
         ink_threshold=0.0005,
-        sample="all",
         background="white",
+        sample_margin_inches=(0.0, 0.0, 0.0, 0.0),
     )
 
     assert len(decisions) == 2
@@ -31,3 +31,22 @@ def test_render_detector_flags_blank_page_and_visible_text(tmp_path: Path) -> No
     assert decisions[0].reason == "ink_below_threshold"
     assert decisions[1].is_empty is False
     assert decisions[1].reason == "ink_above_threshold"
+
+
+def test_render_detector_marks_invalid_sample_area_non_empty(tmp_path: Path) -> None:
+    pdf_path = write_pdf_with_pages(
+        tmp_path / "render-invalid-sample.pdf",
+        page_specs=[empty_page()],
+    )
+
+    decisions = detect_empty_pages_render(
+        input_path=pdf_path,
+        dpi=72,
+        ink_threshold=0.0005,
+        background="white",
+        sample_margin_inches=(100.0, 0.0, 0.0, 0.0),
+    )
+
+    assert len(decisions) == 1
+    assert decisions[0].is_empty is False
+    assert decisions[0].reason == "invalid_sample_area"
