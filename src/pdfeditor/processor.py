@@ -128,8 +128,20 @@ def build_output_path(input_path: Path, out_dir: Path) -> tuple[Path, list[str]]
 
 
 def _summarize_decisions(decisions: list[PageDecision]) -> dict[str, int]:
-    summary: dict[str, int] = {"empty_pages": 0, "non_empty_pages": 0}
+    summary: dict[str, int] = {
+        "empty_pages": 0,
+        "non_empty_pages": 0,
+        "no_paint_ops_pages": 0,
+        "only_invisible_paint_pages": 0,
+        "visible_pages": 0,
+    }
     for decision in decisions:
         summary["empty_pages" if decision.is_empty else "non_empty_pages"] += 1
         summary[decision.reason] = summary.get(decision.reason, 0) + 1
+        if decision.reason == "only_invisible_paint":
+            summary["only_invisible_paint_pages"] += 1
+        elif decision.reason in {"no_paint_ops", "no_contents", "contents_whitespace_only"}:
+            summary["no_paint_ops_pages"] += 1
+        elif not decision.is_empty:
+            summary["visible_pages"] += 1
     return summary

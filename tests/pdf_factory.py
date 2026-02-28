@@ -21,6 +21,11 @@ from pypdf.generic import (
 
 PageKind = Literal[
     "empty",
+    "font_resources_only",
+    "invisible_text_opacity_zero",
+    "invisible_text_tr3",
+    "invisible_text_zero_font_size",
+    "state_ops_only",
     "text",
     "footer_page_number",
     "annotation_only",
@@ -90,6 +95,31 @@ def text_page(text: str) -> PageSpec:
     return PageSpec(kind="text", text=text)
 
 
+def font_resources_only_page() -> PageSpec:
+    """Return a visually blank page that still carries font resources."""
+    return PageSpec(kind="font_resources_only")
+
+
+def invisible_text_tr3_page() -> PageSpec:
+    """Return a page with invisible text via rendering mode Tr=3."""
+    return PageSpec(kind="invisible_text_tr3")
+
+
+def invisible_text_zero_font_size_page() -> PageSpec:
+    """Return a page with invisible text via font size 0."""
+    return PageSpec(kind="invisible_text_zero_font_size")
+
+
+def invisible_text_opacity_zero_page() -> PageSpec:
+    """Return a page with invisible text via zero-opacity ExtGState."""
+    return PageSpec(kind="invisible_text_opacity_zero")
+
+
+def state_ops_only_page() -> PageSpec:
+    """Return a page with only state/layout operators and no painting ops."""
+    return PageSpec(kind="state_ops_only")
+
+
 def footer_page_number_page(text: str) -> PageSpec:
     """Return a page specification with footer page-number text."""
     return PageSpec(kind="footer_page_number", text=text)
@@ -110,8 +140,45 @@ def shape_page() -> PageSpec:
     return PageSpec(kind="shape")
 
 
+def create_wordlike_blank_then_text_pdf(text: str = "Visible text") -> bytes:
+    """Build a two-page PDF with a blank page carrying copied font resources."""
+    writer = PdfWriter()
+
+    blank_page = PageObject.create_blank_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+    text_content_page = PageObject.create_blank_page(width=PAGE_WIDTH, height=PAGE_HEIGHT)
+    _apply_text_content(text_content_page, text, x=72, y=700)
+
+    blank_page[NameObject("/Resources")] = DictionaryObject(text_content_page["/Resources"])
+    _apply_raw_content(blank_page, b"q 1 0 0 1 0 0 cm BT ET Q")
+
+    writer.add_page(blank_page)
+    writer.add_page(text_content_page)
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
 def _apply_page_spec(page: PageObject, page_spec: PageSpec) -> None:
     if page_spec.kind == "empty":
+        return
+    if page_spec.kind == "font_resources_only":
+        page[NameObject("/Resources")] = _font_resources_dictionary()
+        return
+    if page_spec.kind == "invisible_text_tr3":
+        page[NameObject("/Resources")] = _font_resources_dictionary()
+        _apply_raw_content(page, b"BT 3 Tr /F1 12 Tf 72 720 Td (Invisible) Tj ET")
+        return
+    if page_spec.kind == "invisible_text_zero_font_size":
+        page[NameObject("/Resources")] = _font_resources_dictionary()
+        _apply_raw_content(page, b"BT /F1 0 Tf 72 720 Td (Invisible) Tj ET")
+        return
+    if page_spec.kind == "invisible_text_opacity_zero":
+        page[NameObject("/Resources")] = _font_resources_dictionary_with_zero_opacity()
+        _apply_raw_content(page, b"/GS0 gs BT /F1 12 Tf 72 720 Td (InvisibleByOpacity) Tj ET")
+        return
+    if page_spec.kind == "state_ops_only":
+        _apply_raw_content(page, b"q 1 0 0 1 0 0 cm BT ET Q")
         return
     if page_spec.kind == "text":
         _apply_text_content(page, page_spec.text or "1", x=72, y=700)
@@ -131,21 +198,7 @@ def _apply_page_spec(page: PageObject, page_spec: PageSpec) -> None:
 
 
 def _apply_text_content(page: PageObject, text: str, x: int, y: int) -> None:
-    page[NameObject("/Resources")] = DictionaryObject(
-        {
-            NameObject("/Font"): DictionaryObject(
-                {
-                    NameObject("/F1"): DictionaryObject(
-                        {
-                            NameObject("/Type"): NameObject("/Font"),
-                            NameObject("/Subtype"): NameObject("/Type1"),
-                            NameObject("/BaseFont"): NameObject("/Helvetica"),
-                        }
-                    )
-                }
-            )
-        }
-    )
+    page[NameObject("/Resources")] = _font_resources_dictionary()
     escaped_text = _escape_pdf_text(text)
     content = f"BT /F1 12 Tf {x} {y} Td ({escaped_text}) Tj ET".encode("ascii")
     _apply_raw_content(page, content)
@@ -176,6 +229,40 @@ def _build_text_annotation() -> DictionaryObject:
             NameObject("/F"): NumberObject(4),
         }
     )
+
+
+def _font_resources_dictionary() -> DictionaryObject:
+    return DictionaryObject(
+        {
+            NameObject("/Font"): DictionaryObject(
+                {
+                    NameObject("/F1"): DictionaryObject(
+                        {
+                            NameObject("/Type"): NameObject("/Font"),
+                            NameObject("/Subtype"): NameObject("/Type1"),
+                            NameObject("/BaseFont"): NameObject("/Helvetica"),
+                        }
+                    )
+                }
+            )
+        }
+    )
+
+
+def _font_resources_dictionary_with_zero_opacity() -> DictionaryObject:
+    resources = _font_resources_dictionary()
+    resources[NameObject("/ExtGState")] = DictionaryObject(
+        {
+            NameObject("/GS0"): DictionaryObject(
+                {
+                    NameObject("/Type"): NameObject("/ExtGState"),
+                    NameObject("/ca"): FloatObject(0),
+                    NameObject("/CA"): FloatObject(0),
+                }
+            )
+        }
+    )
+    return resources
 
 
 def _escape_pdf_text(text: str) -> str:
