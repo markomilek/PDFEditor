@@ -61,6 +61,7 @@ def test_process_pdf_uses_numeric_suffix_when_output_exists(tmp_path: Path) -> N
         write_when_unchanged=False,
         treat_annotations_as_empty=True,
         dry_run=False,
+        debug_structural=False,
         verbose=False,
     )
 

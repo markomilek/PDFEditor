@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+import json
 from pathlib import Path
 from time import perf_counter
 
@@ -9,7 +11,7 @@ from pypdf import PdfReader
 
 from pdfeditor.detect_empty import detect_page_decisions
 from pdfeditor.detect_render import detect_empty_pages_render
-from pdfeditor.models import FileResult, PageDecision, RunConfig
+from pdfeditor.models import FileResult, JSONValue, PageDecision, RunConfig
 from pdfeditor.rewrite import rewrite_pdf
 
 
@@ -19,6 +21,8 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
     errors: list[str] = []
     timings: dict[str, float] = {}
     run_start = perf_counter()
+    structural_debug_records: list[dict[str, JSONValue]] = []
+    structural_debug_path: Path | None = None
 
     try:
         reader = PdfReader(str(input_path))
@@ -40,6 +44,7 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
             pages_output=0,
             decisions_summary={"empty_pages": 0, "non_empty_pages": 0},
             page_decisions=[],
+            structural_debug_path=None,
             warnings=warnings,
             errors=errors,
             timings=timings,
@@ -51,6 +56,7 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
     structural_decisions = detect_page_decisions(
         reader=reader,
         treat_annotations_as_empty=config.treat_annotations_as_empty,
+        debug_sink=structural_debug_records.append if config.debug_structural else None,
     )
     render_decisions: list[PageDecision] | None = None
     if config.effective_mode in {"render", "both"}:
@@ -67,6 +73,13 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
         mode=config.effective_mode,
     )
     timings["detection_seconds"] = round(perf_counter() - detect_start, 6)
+
+    if config.debug_structural:
+        structural_debug_path = _write_structural_debug_artifact(
+            input_path=input_path,
+            report_dir=Path(config.report_dir),
+            records=structural_debug_records,
+        )
 
     pages_to_keep = [
         decision.page_index
@@ -116,6 +129,7 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
         pages_output=pages_output,
         decisions_summary=_summarize_decisions(decisions),
         page_decisions=decisions,
+        structural_debug_path=str(structural_debug_path) if structural_debug_path is not None else None,
         warnings=warnings,
         errors=errors,
         timings=timings,
@@ -246,3 +260,25 @@ def _combined_page_decision(
         reason=reason,
         details=details,
     )
+
+
+def _write_structural_debug_artifact(
+    input_path: Path,
+    report_dir: Path,
+    records: list[dict[str, JSONValue]],
+) -> Path:
+    """Write per-page structural debugging information for one processed PDF."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    candidate = report_dir / f"structural_debug_{input_path.stem}_{timestamp}.json"
+    suffix = 1
+    while candidate.exists():
+        candidate = report_dir / f"structural_debug_{input_path.stem}_{timestamp}_{suffix}.json"
+        suffix += 1
+
+    payload = {
+        "input_path": str(input_path),
+        "pages": records,
+    }
+    candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return candidate

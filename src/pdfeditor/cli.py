@@ -81,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Report planned changes without writing edited PDFs.",
     )
     parser.add_argument(
+        "--debug-structural",
+        action="store_true",
+        help="Write per-page structural detector debug JSON files to --report-dir.",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Print per-file processing details.",
@@ -128,6 +133,7 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         write_when_unchanged=bool(args.write_when_unchanged),
         treat_annotations_as_empty=bool(args.treat_annotations_as_empty),
         dry_run=bool(args.dry_run),
+        debug_structural=bool(args.debug_structural),
         verbose=bool(args.verbose),
     )
 
@@ -149,6 +155,8 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
                     f"{file_result.status}: {pdf_path} "
                     f"(removed={file_result.pages_removed}, output={file_result.output_path or '-'})"
                 )
+                if file_result.structural_debug_path is not None:
+                    print(f"wrote structural debug to {file_result.structural_debug_path}")
 
     run_result = build_run_result(
         config=config,

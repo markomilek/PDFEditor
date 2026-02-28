@@ -128,6 +128,7 @@ def _text_report(run_result: RunResult) -> str:
         f"  write_when_unchanged={run_result.config.write_when_unchanged}",
         f"  treat_annotations_as_empty={run_result.config.treat_annotations_as_empty}",
         f"  dry_run={run_result.config.dry_run}",
+        f"  debug_structural={run_result.config.debug_structural}",
         f"  verbose={run_result.config.verbose}",
         "",
         "Detection Summary:",
@@ -165,6 +166,8 @@ def _text_report(run_result: RunResult) -> str:
                 f"  decisions_summary={file_result.decisions_summary}",
             ]
         )
+        if file_result.structural_debug_path:
+            lines.append(f"  structural_debug={file_result.structural_debug_path}")
         if file_result.warnings:
             lines.extend(f"  warning: {warning}" for warning in file_result.warnings)
         if file_result.errors:

@@ -34,6 +34,16 @@ pdfeditor --mode both --path uat/input --out uat/output --report-dir uat/reports
 
 Printed page numbers inside PDF content are not renumbered after page removal.
 
+### Structural Debug
+
+To write structural detector debug JSON for each processed PDF:
+
+```bash
+pdfeditor --path uat/input --out uat/output --report-dir uat/reports --debug-structural --verbose
+```
+
+Debug artifacts are written into `uat/reports/` as `structural_debug_<input_stem>_<timestamp>.json`.
+
 ## Suggested Test PDFs
 
 Include representative real-world samples such as:

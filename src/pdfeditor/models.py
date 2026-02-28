@@ -26,6 +26,7 @@ class RunConfig:
     write_when_unchanged: bool
     treat_annotations_as_empty: bool
     dry_run: bool
+    debug_structural: bool
     verbose: bool
 
 
@@ -62,6 +63,7 @@ class FileResult:
     pages_output: int
     decisions_summary: dict[str, int]
     page_decisions: list[PageDecision]
+    structural_debug_path: str | None
     warnings: list[str]
     errors: list[str]
     timings: dict[str, float]

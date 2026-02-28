@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 import copy
+import hashlib
 from io import BytesIO
-from typing import Any
+from typing import Any, Callable
 
 from pypdf import PdfReader
+from pypdf.generic import ArrayObject
 
 from pdfeditor.models import JSONValue, PageDecision
 
@@ -83,6 +85,7 @@ PATH_PAINT_OPERATORS = {"B", "B*", "F", "S", "b", "b*", "f", "f*", "s", "sh"}
 def detect_page_decisions(
     reader: PdfReader,
     treat_annotations_as_empty: bool,
+    debug_sink: Callable[[dict[str, JSONValue]], None] | None = None,
 ) -> list[PageDecision]:
     """Return structured empty-page decisions for each page in a reader."""
     decisions: list[PageDecision] = []
@@ -90,6 +93,8 @@ def detect_page_decisions(
         is_empty, reason, details = is_page_empty_structural(
             page,
             treat_annotations_as_empty=treat_annotations_as_empty,
+            page_index=page_index,
+            debug_sink=debug_sink,
         )
         decisions.append(
             PageDecision(
@@ -122,15 +127,31 @@ def detect_empty_pages(
 def is_page_empty_structural(
     page: Any,
     treat_annotations_as_empty: bool,
+    page_index: int | None = None,
+    debug_sink: Callable[[dict[str, JSONValue]], None] | None = None,
 ) -> tuple[bool, str, dict[str, JSONValue]]:
     """Determine whether a page is structurally empty."""
     details: dict[str, JSONValue] = {}
+    debug_record = _initialize_debug_record(page=page, page_index=page_index)
     try:
         resources = _resolve_dict(page.get("/Resources"))
         xobject_present = _dict_has_entries(resources.get("/XObject"))
         fonts_present = _dict_has_entries(resources.get("/Font"))
+        extgstates_count = _dict_count(resources.get("/ExtGState"))
         annotations_count = _count_entries(page.get("/Annots"))
-        has_contents = page.get("/Contents") is not None
+        raw_contents = page.get("/Contents")
+        has_contents = raw_contents is not None
+        debug_record.update(
+            {
+                "annotations_count": annotations_count,
+                "contents_object_type": _contents_object_type(raw_contents),
+                "extgstates_count": extgstates_count,
+                "fonts_count": _dict_count(resources.get("/Font")),
+                "has_contents": has_contents,
+                "resources_keys_present": _resource_keys(resources),
+                "xobjects_count": _dict_count(resources.get("/XObject")),
+            }
+        )
         details.update(
             {
                 "annotations_count": annotations_count,
@@ -152,6 +173,7 @@ def is_page_empty_structural(
                 "xobject_present": xobject_present,
             }
         )
+        _merge_content_stream_debug(page=page, debug_record=debug_record)
 
         if xobject_present:
             return False, "has_xobject", details
@@ -166,18 +188,33 @@ def is_page_empty_structural(
         if contents is None:
             return True, "no_contents", details
 
-        content_data = contents.get_data()
+        try:
+            content_data = contents.get_data()
+        except Exception as exc:
+            _append_debug_exception(debug_record, exc)
+            raise
         details["contents_length_bytes"] = len(content_data)
+        debug_record["total_contents_bytes"] = len(content_data)
 
         normalized_data = _strip_pdf_comments_and_whitespace(content_data)
         if not normalized_data:
             return True, "contents_whitespace_only", details
 
-        operations = list(getattr(contents, "operations", []))
+        try:
+            operations = list(getattr(contents, "operations", []))
+        except Exception as exc:
+            _append_debug_exception(debug_record, exc)
+            raise
+        debug_record["operator_summary"] = _build_operator_summary(operations)
         if not operations and normalized_data:
             return True, "no_paint_ops", details
 
-        result = _evaluate_operations(page=page, operations=operations, details=details)
+        result = _evaluate_operations(
+            page=page,
+            operations=operations,
+            details=details,
+            debug_record=debug_record,
+        )
         if result is not None:
             return result
 
@@ -187,6 +224,9 @@ def is_page_empty_structural(
     except Exception as exc:
         details["error"] = str(exc)
         return False, "unknown_structure", details
+    finally:
+        if debug_sink is not None:
+            debug_sink(_finalize_debug_record(debug_record))
 
 
 def _resolve_object(value: Any) -> Any:
@@ -225,6 +265,15 @@ def _count_entries(value: Any) -> int:
     raise TypeError("Expected a PDF array-like object.")
 
 
+def _dict_count(value: Any) -> int:
+    resolved = _resolve_object(value)
+    if resolved is None:
+        return 0
+    if not hasattr(resolved, "items"):
+        raise TypeError("Expected a PDF dictionary object.")
+    return len(list(resolved.items()))
+
+
 def _strip_pdf_comments_and_whitespace(content: bytes) -> bytes:
     output = bytearray()
     in_comment = False
@@ -246,6 +295,7 @@ def _evaluate_operations(
     page: Any,
     operations: list[tuple[Any, Any]],
     details: dict[str, JSONValue],
+    debug_record: dict[str, JSONValue] | None = None,
 ) -> tuple[bool, str, dict[str, JSONValue]] | None:
     resources = _resolve_dict(page.get("/Resources"))
     extgstate_resources = _resolve_dict(resources.get("/ExtGState"))
@@ -274,10 +324,20 @@ def _evaluate_operations(
             continue
         if operator_name == "Tr":
             state["text_rendering_mode"] = _to_int(_operand_at(operands, 0), default=state["text_rendering_mode"])
+            _record_operator_event(debug_record, "tr_events", {"operator": "Tr", "value": int(state["text_rendering_mode"])})
             _sync_last_seen(details, state)
             continue
         if operator_name == "Tf":
             state["font_size"] = _to_float(_operand_at(operands, 1))
+            _record_operator_event(
+                debug_record,
+                "tf_events",
+                {
+                    "operator": "Tf",
+                    "font": _name_value(_operand_at(operands, 0)),
+                    "size": float(state["font_size"]) if state["font_size"] is not None else None,
+                },
+            )
             _sync_last_seen(details, state)
             continue
         if operator_name == "gs":
@@ -286,6 +346,16 @@ def _evaluate_operations(
                 _append_limited(details["extgstate_hits"], extgstate_name)
                 state["extgstate_name"] = extgstate_name
                 _apply_extgstate(state, extgstate_resources.get(extgstate_name), details)
+                _record_operator_event(
+                    debug_record,
+                    "gs_events",
+                    {
+                        "operator": "gs",
+                        "name": extgstate_name,
+                        "ca": float(state["fill_opacity"]),
+                        "CA": float(state["stroke_opacity"]),
+                    },
+                )
             else:
                 _append_limited(details["notes"], "gs_without_name")
             _sync_last_seen(details, state)
@@ -427,3 +497,185 @@ def _to_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _initialize_debug_record(page: Any, page_index: int | None) -> dict[str, JSONValue]:
+    return {
+        "annotations_count": 0,
+        "contents_object_type": "none",
+        "content_streams": [],
+        "crop_box": _box_to_dict(getattr(page, "cropbox", None)),
+        "extgstates_count": 0,
+        "fonts_count": 0,
+        "has_contents": False,
+        "media_box": _box_to_dict(getattr(page, "mediabox", None)),
+        "number_of_content_streams": 0,
+        "operator_summary": {
+            "gs_events": [],
+            "paint_ops_seen": [],
+            "parsing_exceptions": [],
+            "text_show_ops_seen": [],
+            "tf_events": [],
+            "top_operators_by_frequency": [],
+            "total_operations_count": 0,
+            "tr_events": [],
+            "unique_operators_count": 0,
+            "xobject_paint_seen": False,
+        },
+        "page_index_0": page_index,
+        "page_index_1": page_index + 1 if page_index is not None else None,
+        "resources_keys_present": [],
+        "total_contents_bytes": 0,
+        "xobjects_count": 0,
+    }
+
+
+def _finalize_debug_record(debug_record: dict[str, JSONValue]) -> dict[str, JSONValue]:
+    return debug_record
+
+
+def _box_to_dict(box: Any) -> dict[str, JSONValue] | None:
+    if box is None:
+        return None
+    try:
+        return {
+            "left": float(box.left),
+            "bottom": float(box.bottom),
+            "right": float(box.right),
+            "top": float(box.top),
+        }
+    except Exception:
+        return {"repr": str(box)}
+
+
+def _contents_object_type(contents: Any) -> str:
+    resolved = _resolve_object(contents)
+    if resolved is None:
+        return "none"
+    if isinstance(resolved, ArrayObject):
+        return "array"
+    return "single"
+
+
+def _resource_keys(resources: dict[str, Any]) -> list[str]:
+    keys: list[str] = []
+    for key in resources:
+        keys.append(str(key).lstrip("/"))
+    return sorted(keys)
+
+
+def _merge_content_stream_debug(page: Any, debug_record: dict[str, JSONValue]) -> None:
+    raw_contents = page.get("/Contents")
+    stream_objects = _content_stream_objects(raw_contents)
+    debug_record["number_of_content_streams"] = len(stream_objects)
+    previews: list[dict[str, JSONValue]] = []
+    total_bytes = 0
+    exceptions = _operator_summary(debug_record)["parsing_exceptions"]
+
+    for stream_index, stream_object in enumerate(stream_objects):
+        try:
+            decoded = bytes(stream_object.get_data())
+            total_bytes += len(decoded)
+            if stream_index < 3:
+                previews.append(
+                    {
+                        "stream_index": stream_index,
+                        "decoded_length_bytes": len(decoded),
+                        "first_200_bytes": _safe_preview(decoded[:200]),
+                        "last_200_bytes": _safe_preview(decoded[-200:]),
+                        "sha256": hashlib.sha256(decoded).hexdigest(),
+                    }
+                )
+        except Exception as exc:
+            total_bytes += 0
+            _append_limited(exceptions, _exception_text(exc), limit=10)
+            if stream_index < 3:
+                previews.append(
+                    {
+                        "stream_index": stream_index,
+                        "decoded_length_bytes": None,
+                        "error": _exception_text(exc),
+                    }
+                )
+
+    debug_record["content_streams"] = previews
+    debug_record["total_contents_bytes"] = total_bytes
+
+
+def _content_stream_objects(contents: Any) -> list[Any]:
+    resolved = _resolve_object(contents)
+    if resolved is None:
+        return []
+    if isinstance(resolved, ArrayObject):
+        return [_resolve_object(item) for item in resolved]
+    return [resolved]
+
+
+def _safe_preview(content: bytes) -> str:
+    return repr(content.decode("latin-1", errors="replace"))[1:-1]
+
+
+def _build_operator_summary(operations: list[tuple[Any, Any]]) -> dict[str, JSONValue]:
+    counts: dict[str, int] = {}
+    paint_ops_seen: list[str] = []
+    text_show_ops_seen: list[str] = []
+    xobject_paint_seen = False
+
+    for _, operator in operations:
+        operator_name = _operator_name(operator)
+        counts[operator_name] = counts.get(operator_name, 0) + 1
+        if operator_name in PAINT_OPERATORS:
+            _append_limited(paint_ops_seen, operator_name, limit=15)
+        if operator_name in TEXT_SHOW_OPERATORS:
+            _append_limited(text_show_ops_seen, operator_name, limit=15)
+        if operator_name == "Do":
+            xobject_paint_seen = True
+
+    top_operators = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:15]
+    return {
+        "gs_events": [],
+        "paint_ops_seen": paint_ops_seen,
+        "parsing_exceptions": [],
+        "text_show_ops_seen": text_show_ops_seen,
+        "tf_events": [],
+        "top_operators_by_frequency": [
+            {"operator": operator, "count": count} for operator, count in top_operators
+        ],
+        "total_operations_count": len(operations),
+        "tr_events": [],
+        "unique_operators_count": len(counts),
+        "xobject_paint_seen": xobject_paint_seen,
+    }
+
+
+def _operator_summary(debug_record: dict[str, JSONValue] | None) -> dict[str, JSONValue]:
+    if debug_record is None:
+        return {}
+    summary = debug_record.get("operator_summary")
+    if isinstance(summary, dict):
+        return summary
+    return {}
+
+
+def _record_operator_event(
+    debug_record: dict[str, JSONValue] | None,
+    key: str,
+    event: dict[str, JSONValue],
+) -> None:
+    summary = _operator_summary(debug_record)
+    target = summary.get(key)
+    if not isinstance(target, list) or len(target) >= 10:
+        return
+    target.append(event)
+
+
+def _append_debug_exception(debug_record: dict[str, JSONValue], exc: Exception) -> None:
+    summary = _operator_summary(debug_record)
+    target = summary.get("parsing_exceptions")
+    if not isinstance(target, list):
+        return
+    _append_limited(target, _exception_text(exc), limit=10)
+
+
+def _exception_text(exc: Exception) -> str:
+    return f"{type(exc).__name__}: {exc}"

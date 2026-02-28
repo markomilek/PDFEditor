@@ -125,6 +125,17 @@ Current coverage:
 * verifies that a rendered blank page is classified empty
 * verifies that a rendered text page is classified non-empty
 
+### `test_structural_debug_output.py`
+
+Structural debug artifact coverage.
+
+Current coverage:
+
+* runs `process_pdf()` with structural debug enabled
+* verifies that a separate structural debug JSON artifact is written
+* verifies that the artifact contains per-page records and operator summaries
+* ensures the debug path is carried back in the structured file result
+
 ## Test Support Files
 
 ### `pdf_factory.py`
@@ -188,3 +199,13 @@ If `pypdfium2` is unavailable:
 
 * `render` fails with exit code `2`
 * `both` falls back to structural-only and records a warning
+
+## Structural Debugging
+
+The CLI also supports `--debug-structural`.
+
+When enabled:
+
+* the structural detector emits a separate per-file JSON artifact in the report directory
+* the main run report includes the path to that artifact
+* each page record includes content-stream metadata, capped stream previews, and an operator summary derived from `pypdf` parsing
