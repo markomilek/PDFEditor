@@ -2,4 +2,4 @@ import pdfeditor
 
 
 def test_version_exists() -> None:
-    assert hasattr(pdfeditor, "__version__")
+    assert pdfeditor.__version__ == "1.0.0"

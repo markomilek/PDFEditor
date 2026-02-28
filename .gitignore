@@ -17,6 +17,7 @@ uat/reports/
 *.env
 
 
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 
@@ -87,6 +88,8 @@ ScaffoldingReadMe.txt
 StyleCopReport.xml
 
 # Files built by Visual Studio
+*.DS_Store
+*/.vscode
 *_i.c
 *_p.c
 *_h.h
@@ -422,3 +425,4 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+.DS_Store

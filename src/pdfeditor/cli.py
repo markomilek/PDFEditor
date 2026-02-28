@@ -14,6 +14,7 @@ from pdfeditor.processor import process_pdf
 from pdfeditor.reporting import build_run_result, write_run_reports
 
 EDITED_INPUT_PATTERN = re.compile(r"\.edited(?:\.\d+)?\.pdf\Z", re.IGNORECASE)
+RenderSampleMargin = tuple[float, float, float, float]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -174,11 +175,9 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
     report_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if run_errors:
-        pass
-    elif not scan_path.exists() or not scan_path.is_dir():
+    if not run_errors and (not scan_path.exists() or not scan_path.is_dir()):
         run_errors.append(f"Scan path is not a directory: {scan_path}")
-    else:
+    elif not run_errors:
         for pdf_path in discover_pdfs(scan_path, recursive=config.recursive):
             file_result = process_pdf(pdf_path, out_dir=out_dir, config=config)
             files.append(file_result)
@@ -242,7 +241,7 @@ def _configure_pypdf_logging(capture_warnings: bool) -> None:
         logger.addHandler(logging.NullHandler())
 
 
-def _parse_render_sample_margin(value: str) -> tuple[float, float, float, float]:
+def _parse_render_sample_margin(value: str) -> RenderSampleMargin:
     """Parse TOP,LEFT,RIGHT,BOTTOM sampling margins in inches."""
     parts = [part.strip() for part in value.split(",")]
     if len(parts) != 4:
@@ -264,4 +263,5 @@ def _parse_render_sample_margin(value: str) -> tuple[float, float, float, float]
                 "render sample margin values must be >= 0 inches"
             )
         margins.append(margin)
-    return tuple(margins)  # type: ignore[return-value]
+    top, left, right, bottom = margins
+    return (top, left, right, bottom)

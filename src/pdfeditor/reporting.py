@@ -23,8 +23,8 @@ def build_run_result(
     errors: list[str] | None = None,
 ) -> RunResult:
     """Build an aggregated run result with environment metadata."""
-    now_local = datetime.now().astimezone()
     now_utc = datetime.now(timezone.utc)
+    now_local = now_utc.astimezone()
     return RunResult(
         timestamp_local=now_local.isoformat(),
         timestamp_utc=now_utc.isoformat(),

@@ -338,20 +338,16 @@ def _write_structural_debug_artifact(
     records: list[dict[str, JSONValue]],
 ) -> Path:
     """Write per-page structural debugging information for one processed PDF."""
-    report_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    candidate = report_dir / f"structural_debug_{input_path.stem}_{timestamp}.json"
-    suffix = 1
-    while candidate.exists():
-        candidate = report_dir / f"structural_debug_{input_path.stem}_{timestamp}_{suffix}.json"
-        suffix += 1
-
     payload = {
         "input_path": str(input_path),
         "pages": records,
     }
-    candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return candidate
+    return _write_json_artifact(
+        input_path=input_path,
+        report_dir=report_dir,
+        prefix="structural_debug",
+        payload=payload,
+    )
 
 
 def _write_pypdf_warnings_artifact(
@@ -360,20 +356,16 @@ def _write_pypdf_warnings_artifact(
     collector: PyPdfWarningCollector,
 ) -> Path:
     """Write captured pypdf warnings for one processed PDF."""
-    report_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    candidate = report_dir / f"pypdf_warnings_{input_path.stem}_{timestamp}.json"
-    suffix = 1
-    while candidate.exists():
-        candidate = report_dir / f"pypdf_warnings_{input_path.stem}_{timestamp}_{suffix}.json"
-        suffix += 1
-
     payload = {
         "input_path": str(input_path),
         **collector.to_dict(),
     }
-    candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return candidate
+    return _write_json_artifact(
+        input_path=input_path,
+        report_dir=report_dir,
+        prefix="pypdf_warnings",
+        payload=payload,
+    )
 
 
 def _write_render_debug_artifact(
@@ -383,14 +375,6 @@ def _write_render_debug_artifact(
     config: RunConfig,
 ) -> Path:
     """Write per-page render debugging information for one processed PDF."""
-    report_dir.mkdir(parents=True, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    candidate = report_dir / f"render_debug_{input_path.stem}_{timestamp}.json"
-    suffix = 1
-    while candidate.exists():
-        candidate = report_dir / f"render_debug_{input_path.stem}_{timestamp}_{suffix}.json"
-        suffix += 1
-
     payload = {
         "input_path": str(input_path),
         "render_parameters": {
@@ -402,5 +386,41 @@ def _write_render_debug_artifact(
         },
         "per_page": records,
     }
+    return _write_json_artifact(
+        input_path=input_path,
+        report_dir=report_dir,
+        prefix="render_debug",
+        payload=payload,
+    )
+
+
+def _write_json_artifact(
+    input_path: Path,
+    report_dir: Path,
+    prefix: str,
+    payload: dict[str, JSONValue],
+) -> Path:
+    """Write one timestamped JSON artifact for a processed PDF."""
+    candidate = _build_timestamped_artifact_path(
+        input_path=input_path,
+        report_dir=report_dir,
+        prefix=prefix,
+    )
     candidate.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return candidate
+
+
+def _build_timestamped_artifact_path(
+    input_path: Path,
+    report_dir: Path,
+    prefix: str,
+) -> Path:
+    """Build a unique timestamped artifact path for one processed PDF."""
+    report_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    candidate = report_dir / f"{prefix}_{input_path.stem}_{timestamp}.json"
+    suffix = 1
+    while candidate.exists():
+        candidate = report_dir / f"{prefix}_{input_path.stem}_{timestamp}_{suffix}.json"
+        suffix += 1
     return candidate
