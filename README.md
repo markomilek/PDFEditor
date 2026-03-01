@@ -29,7 +29,7 @@ The current implementation supports:
 * non-recursive processing by default, with optional recursive traversal
 * ignoring files already ending in `.edited.pdf`
 * structural empty-page detection
-* optional rendering-based empty-page detection using `pypdfium2` when installed
+* rendering-based empty-page detection using `pypdfium2`
 * combined mode where a page is treated as empty if either the structural detector or the render detector marks it empty
 * non-destructive rewrite to a new file using the `.edited.pdf` suffix
 * collision-safe output naming such as `.edited.1.pdf`, `.edited.2.pdf`, and so on
@@ -74,7 +74,7 @@ Current structural behavior includes:
 
 ### Render Mode
 
-Render mode is optional and requires `pypdfium2` to be installed in the active environment.
+Render mode uses the packaged `pypdfium2` dependency installed with PDFEditor.
 
 Render mode:
 
@@ -90,24 +90,32 @@ In `--mode both`, a page is treated as empty if:
 * the structural detector marks it empty, or
 * the render detector marks it empty
 
-If `pypdfium2` is unavailable:
-
-* `--mode render` fails with exit code `2`
-* `--mode both` falls back to structural-only detection and records a warning
-
 ## Installation
 
-The expected environment setup is:
+Preferred end-user installation:
 
 ```bash
+pip3 install git+https://github.com/markomilek/PDFEditor.git
+```
+
+This installs `pdfeditor` together with its runtime dependencies, including `pypdfium2`.
+
+Contributor installation from a local clone:
+
+```bash
+git clone https://github.com/markomilek/PDFEditor.git
+cd PDFEditor
 python3 -m venv venv
 source venv/bin/activate
 pip3 install -r requirements.txt
-pip install -e .
+pip3 install -e .
 ```
 
 Notes:
 
+* the Git-based `pip3 install` command above is the preferred installation method for users
+* the editable install workflow above is intended for contributors working from a local checkout
+* `requirements.txt` is for contributor and local validation setup
 * do not replace this workflow with Poetry, Hatch, or Pipenv
 * the project uses `setuptools`
 * editable install is recommended for local development and validation
@@ -224,7 +232,7 @@ Run reports include:
 * username and hostname
 * Python version
 * `pypdf` version
-* `pypdfium2` version when available
+* `pypdfium2` version
 * run configuration
 * per-file status
 * pages removed and output counts
@@ -405,7 +413,7 @@ Current limitations include:
 * no bookmark retargeting
 * no printed page-number renumbering inside page content
 * structural mode does not attempt white-on-white or z-order visibility analysis
-* render mode depends on optional `pypdfium2`
+* render mode depends on `pypdfium2`
 
 ## License
 

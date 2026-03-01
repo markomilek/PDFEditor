@@ -6,6 +6,7 @@ Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 License-File: LICENSE
 Requires-Dist: pypdf
+Requires-Dist: pypdfium2
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Dynamic: license-file
