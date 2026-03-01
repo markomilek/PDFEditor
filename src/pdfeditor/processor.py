@@ -11,7 +11,7 @@ from time import perf_counter
 from pypdf import PdfReader
 
 from pdfeditor.detect_empty import detect_page_decisions
-from pdfeditor.detect_render import detect_empty_pages_render
+from pdfeditor.detect_render import detect_empty_pages_render, is_render_backend_available
 from pdfeditor.models import FileResult, JSONValue, PageDecision, RunConfig
 from pdfeditor.pypdf_debug import (
     PyPdfWarningCollector,
@@ -30,6 +30,7 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
     structural_debug_path: Path | None = None
     render_debug_records: list[dict[str, JSONValue]] = []
     render_debug_path: Path | None = None
+    stamp_debug_path: Path | None = None
     warning_collector = PyPdfWarningCollector()
     pypdf_warnings_path: Path | None = None
     capture_enabled = config.debug_pypdf_xref or config.strict_xref
@@ -98,6 +99,11 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
             pypdf_warnings_count=len(warning_collector.events),
             pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
             render_debug_path=None,
+            stamping_enabled=config.stamp_page_numbers,
+            stamping_applied_pages=0,
+            stamping_forced_pages=0,
+            stamping_skipped_pages=0,
+            stamping_debug_path=None,
             warnings=warnings,
             errors=errors,
             timings=timings,
@@ -143,6 +149,11 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
             pypdf_warnings_count=len(warning_collector.events),
             pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
             render_debug_path=str(render_debug_path) if render_debug_path is not None else None,
+            stamping_enabled=config.stamp_page_numbers,
+            stamping_applied_pages=0,
+            stamping_forced_pages=0,
+            stamping_skipped_pages=0,
+            stamping_debug_path=None,
             warnings=warnings,
             errors=errors,
             timings=timings,
@@ -161,6 +172,33 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
         output_path, path_warnings = build_output_path(input_path=input_path, out_dir=out_dir)
         warnings.extend(path_warnings)
 
+    if config.stamp_page_numbers and output_path is not None and not is_render_backend_available():
+        errors.append("stamping_requires_pypdfium2")
+        errors.append("Page-number stamping requires optional dependency 'pypdfium2'.")
+        timings["total_seconds"] = round(perf_counter() - run_start, 6)
+        return FileResult(
+            input_path=str(input_path),
+            output_path=None,
+            status="failed",
+            pages_original=pages_original,
+            pages_removed=pages_removed,
+            pages_output=0,
+            decisions_summary=_summarize_decisions(decisions),
+            page_decisions=decisions,
+            structural_debug_path=str(structural_debug_path) if structural_debug_path is not None else None,
+            pypdf_warnings_count=len(warning_collector.events),
+            pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
+            render_debug_path=str(render_debug_path) if render_debug_path is not None else None,
+            stamping_enabled=True,
+            stamping_applied_pages=0,
+            stamping_forced_pages=0,
+            stamping_skipped_pages=0,
+            stamping_debug_path=None,
+            warnings=warnings,
+            errors=errors,
+            timings=timings,
+        )
+
     try:
         if config.dry_run:
             status = "dry_run" if pages_removed > 0 else "unchanged"
@@ -175,10 +213,18 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
                 output_path=output_path,
                 pages_to_keep=pages_to_keep if pages_removed else list(range(pages_original)),
                 bookmark_policy="drop",
+                stamp_config=_stamp_config(config) if config.stamp_page_numbers else None,
             )
             timings["write_seconds"] = round(perf_counter() - write_start, 6)
             warnings.extend(rewrite_result.warnings)
             pages_output = rewrite_result.pages_output
+            if config.debug_render and rewrite_result.stamp_decisions:
+                stamp_debug_path = _write_stamp_debug_artifact(
+                    input_path=input_path,
+                    report_dir=Path(config.report_dir),
+                    records=rewrite_result.stamp_decisions,
+                    config=config,
+                )
             status = "edited" if pages_removed > 0 else "copied"
     except Exception as exc:
         errors.append(f"rewrite_error: {exc}")
@@ -200,6 +246,11 @@ def process_pdf(input_path: Path, out_dir: Path, config: RunConfig) -> FileResul
         pypdf_warnings_count=len(warning_collector.events),
         pypdf_warnings_path=str(pypdf_warnings_path) if pypdf_warnings_path is not None else None,
         render_debug_path=str(render_debug_path) if render_debug_path is not None else None,
+        stamping_enabled=config.stamp_page_numbers,
+        stamping_applied_pages=rewrite_result.stamping_applied_pages if 'rewrite_result' in locals() else 0,
+        stamping_forced_pages=rewrite_result.stamping_forced_pages if 'rewrite_result' in locals() else 0,
+        stamping_skipped_pages=rewrite_result.stamping_skipped_pages if 'rewrite_result' in locals() else 0,
+        stamping_debug_path=str(stamp_debug_path) if stamp_debug_path is not None else None,
         warnings=warnings,
         errors=errors,
         timings=timings,
@@ -394,6 +445,35 @@ def _write_render_debug_artifact(
     )
 
 
+def _write_stamp_debug_artifact(
+    input_path: Path,
+    report_dir: Path,
+    records: list[dict[str, JSONValue]],
+    config: RunConfig,
+) -> Path:
+    """Write per-page stamping debug information for one processed PDF."""
+    payload = {
+        "input_path": str(input_path),
+        "stamping_parameters": {
+            "ink_threshold": config.ink_threshold,
+            "pagenum_box": list(config.pagenum_box) if config.pagenum_box is not None else None,
+            "pagenum_font": config.pagenum_font,
+            "pagenum_format": config.pagenum_format,
+            "pagenum_size": config.pagenum_size,
+            "stamp_page_numbers_force": config.stamp_page_numbers_force,
+            "render_dpi": config.render_dpi,
+            "white_threshold": config.white_threshold,
+        },
+        "per_page": records,
+    }
+    return _write_json_artifact(
+        input_path=input_path,
+        report_dir=report_dir,
+        prefix="stamp_debug",
+        payload=payload,
+    )
+
+
 def _write_json_artifact(
     input_path: Path,
     report_dir: Path,
@@ -424,3 +504,18 @@ def _build_timestamped_artifact_path(
         candidate = report_dir / f"{prefix}_{input_path.stem}_{timestamp}_{suffix}.json"
         suffix += 1
     return candidate
+
+
+def _stamp_config(config: RunConfig) -> dict[str, JSONValue]:
+    if config.pagenum_box is None:
+        raise ValueError("Page-number stamping requires a configured pagenum_box.")
+    return {
+        "ink_threshold": config.ink_threshold,
+        "pagenum_box": list(config.pagenum_box),
+        "pagenum_font": config.pagenum_font,
+        "pagenum_format": config.pagenum_format,
+        "pagenum_size": config.pagenum_size,
+        "force": config.stamp_page_numbers_force,
+        "render_dpi": config.render_dpi,
+        "white_threshold": config.white_threshold,
+    }

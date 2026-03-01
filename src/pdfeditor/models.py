@@ -23,6 +23,12 @@ class RunConfig:
     effective_background: str
     render_sample_margin: tuple[float, float, float, float]
     white_threshold: int
+    stamp_page_numbers: bool
+    stamp_page_numbers_force: bool
+    pagenum_box: tuple[float, float, float, float] | None
+    pagenum_size: float
+    pagenum_font: str
+    pagenum_format: str
     recursive: bool
     write_when_unchanged: bool
     treat_annotations_as_empty: bool
@@ -52,6 +58,10 @@ class RewriteResult:
     pages_output: int
     outlines_copied: int
     outlines_dropped: int
+    stamp_decisions: list[dict[str, JSONValue]] = field(default_factory=list)
+    stamping_applied_pages: int = 0
+    stamping_forced_pages: int = 0
+    stamping_skipped_pages: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -71,6 +81,11 @@ class FileResult:
     pypdf_warnings_count: int
     pypdf_warnings_path: str | None
     render_debug_path: str | None
+    stamping_enabled: bool
+    stamping_applied_pages: int
+    stamping_forced_pages: int
+    stamping_skipped_pages: int
+    stamping_debug_path: str | None
     warnings: list[str]
     errors: list[str]
     timings: dict[str, float]

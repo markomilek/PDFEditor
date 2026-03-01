@@ -219,6 +219,21 @@ Debugging options:
 * `--strict-xref`
   Treat captured `pypdf` warnings as per-file failures.
 
+Page-number correction options:
+
+* `--stamp-page-numbers`
+  Enable post-rewrite page-number correction.
+* `--stamp-page-numbers-force`
+  Force stamping even when the configured box already contains ink. Use with caution.
+* `--pagenum-box "x,y,w,h"`
+  Required when stamping is enabled. The box is measured in inches from the bottom-left corner of the page.
+* `--pagenum-size FLOAT`
+  Stamped font size in points. Default: `10`.
+* `--pagenum-font {Helvetica,Times-Roman,Courier}`
+  Stamped font family. Default: `Helvetica`.
+* `--pagenum-format STRING`
+  Supports `{page}`, `{roman}`, and `{ROMAN}`. Default: `{page}`.
+
 ## Reports and Debug Artifacts
 
 Every execution writes:
@@ -275,6 +290,57 @@ Threshold interaction:
 
 * `white_threshold` controls which pixels still count as background
 * `ink_threshold` controls how much sampled ink is required before the page becomes non-empty
+
+## Page Number Correction (Stamping)
+
+PDFEditor can optionally correct printed page numbers after page deletions by covering the configured footer or header number area and stamping a new centered label.
+
+Behavior:
+
+* stamping runs on the rewritten output pages
+* the old page-number box is covered with a filled rectangle
+* cover color is chosen automatically from rendered page pixels in that box
+* the replacement label is centered in the box
+* numbering follows final output order, starting at `1`
+
+Supported format tokens:
+
+* `{page}` for Arabic numerals
+* `{roman}` for lowercase Roman numerals
+* `{ROMAN}` for uppercase Roman numerals
+
+Examples:
+
+```bash
+pdfeditor --path incoming_pdfs --out cleaned_pdfs --report-dir reports --stamp-page-numbers --pagenum-box "0.75,0.25,1.0,0.5"
+pdfeditor --path incoming_pdfs --out cleaned_pdfs --report-dir reports --stamp-page-numbers --pagenum-box "0.75,0.25,1.0,0.5" --pagenum-format "Page {page}"
+pdfeditor --path incoming_pdfs --out cleaned_pdfs --report-dir reports --stamp-page-numbers --pagenum-box "0.75,0.25,1.0,0.5" --pagenum-font Times-Roman --pagenum-size 11 --pagenum-format "{ROMAN}"
+pdfeditor --path incoming_pdfs --out cleaned_pdfs --report-dir reports --stamp-page-numbers --stamp-page-numbers-force --pagenum-box "0.75,0.25,1.0,0.5"
+```
+
+Units and coordinate system:
+
+* `pagenum-box` is `x,y,w,h`
+* all values are inches
+* origin is the page bottom-left corner
+
+Guardrail:
+
+* PDFEditor renders the configured page-number box and measures ink within it using the existing `ink_threshold`
+* if the box already contains real content above the guardrail threshold, stamping is skipped for that page
+* this avoids covering non-page-number content accidentally
+
+Forced stamping:
+
+* `--stamp-page-numbers-force` bypasses the guardrail and stamps every output page
+* use this only when you are confident the configured box is reserved for page numbers
+* forced stamping can overwrite real footer or header content
+
+Caveats:
+
+* stamping requires `pypdfium2`
+* the tool does not rebuild tables of contents, figures, indexes, or internal printed references
+* bookmark and outline correction policy remains drop-only for removed pages
 
 ## Testing
 

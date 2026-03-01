@@ -105,6 +105,19 @@ Current coverage:
 * verifies wrong counts fail with exit code `2`
 * verifies negative values fail with exit code `2`
 
+### `test_cli_page_number_parse.py`
+
+CLI parsing coverage for page-number stamping options.
+
+Current coverage:
+
+* verifies `--stamp-page-numbers` requires `--pagenum-box`
+* verifies `--stamp-page-numbers-force` requires `--stamp-page-numbers`
+* verifies `--stamp-page-numbers-force` parses correctly when stamping is enabled
+* verifies `--pagenum-box` parses `x,y,w,h` values in inches
+* verifies invalid box formats fail with exit code `2`
+* verifies negative box values fail with exit code `2`
+
 ### `test_wordlike_blank_page.py`
 
 Regression test for Word-like blank pages that still carry font resources.
@@ -167,6 +180,17 @@ Current coverage:
 * verifies that warnings logged under the `pypdf` logger are captured into structured events
 * verifies that captured events contain a message and stack trace
 * verifies the strict helper raises when warnings are present
+
+### `test_page_number_stamping.py`
+
+Page-number stamping coverage.
+
+Current coverage:
+
+* verifies Roman numeral conversion and format token replacement
+* conditionally verifies stamping adds visible footer ink when `pypdfium2` is available
+* conditionally verifies the stamping guardrail skips pages where the configured box already contains real content
+* conditionally verifies forced stamping bypasses the guardrail and records `stamped_forced`
 
 ## Test Support Files
 
@@ -267,3 +291,16 @@ When enabled:
 * `white_threshold` controls how close to white a rendered pixel may be before it counts as background
 * `render-sample-margin` defines the sampled body region in inches from the top, left, right, and bottom edges
 * render debug tests are skipped automatically when `pypdfium2` is unavailable
+
+## Page-Number Stamping
+
+Page-number stamping is optional and depends on `pypdfium2`.
+
+Current behavior:
+
+* `--pagenum-box` uses `x,y,w,h` in inches from the bottom-left origin
+* the configured box is covered with a filled rectangle before the corrected label is stamped
+* the stamped label is centered in the box
+* the guardrail uses the existing `ink_threshold`
+* if the box already contains real content above the guardrail threshold, stamping is skipped for that page
+* `--stamp-page-numbers-force` bypasses the guardrail and stamps anyway

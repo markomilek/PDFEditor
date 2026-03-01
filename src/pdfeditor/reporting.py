@@ -78,6 +78,9 @@ def _build_totals(files: list[FileResult]) -> dict[str, int]:
         "render_empty_pages": 0,
         "both_empty_pages": 0,
         "pypdf_warnings_total": 0,
+        "stamping_applied_pages_total": 0,
+        "stamping_forced_pages_total": 0,
+        "stamping_skipped_pages_total": 0,
     }
     for file_result in files:
         totals["structural_empty_pages"] += file_result.decisions_summary.get(
@@ -90,6 +93,9 @@ def _build_totals(files: list[FileResult]) -> dict[str, int]:
         )
         totals["both_empty_pages"] += file_result.decisions_summary.get("both_empty_pages", 0)
         totals["pypdf_warnings_total"] += file_result.pypdf_warnings_count
+        totals["stamping_applied_pages_total"] += file_result.stamping_applied_pages
+        totals["stamping_forced_pages_total"] += file_result.stamping_forced_pages
+        totals["stamping_skipped_pages_total"] += file_result.stamping_skipped_pages
     return totals
 
 
@@ -127,6 +133,12 @@ def _text_report(run_result: RunResult) -> str:
         f"  effective_background={run_result.config.effective_background}",
         f"  render_sample_margin={list(run_result.config.render_sample_margin)}",
         f"  white_threshold={run_result.config.white_threshold}",
+        f"  stamp_page_numbers={run_result.config.stamp_page_numbers}",
+        f"  stamp_page_numbers_force={run_result.config.stamp_page_numbers_force}",
+        f"  pagenum_box={list(run_result.config.pagenum_box) if run_result.config.pagenum_box is not None else None}",
+        f"  pagenum_size={run_result.config.pagenum_size}",
+        f"  pagenum_font={run_result.config.pagenum_font}",
+        f"  pagenum_format={run_result.config.pagenum_format}",
         f"  recursive={run_result.config.recursive}",
         f"  write_when_unchanged={run_result.config.write_when_unchanged}",
         f"  treat_annotations_as_empty={run_result.config.treat_annotations_as_empty}",
@@ -171,6 +183,10 @@ def _text_report(run_result: RunResult) -> str:
                 f"  timings={file_result.timings}",
                 f"  decisions_summary={file_result.decisions_summary}",
                 f"  pypdf_warnings_count={file_result.pypdf_warnings_count}",
+                f"  stamping_enabled={file_result.stamping_enabled}",
+                f"  stamping_applied_pages={file_result.stamping_applied_pages}",
+                f"  stamping_forced_pages={file_result.stamping_forced_pages}",
+                f"  stamping_skipped_pages={file_result.stamping_skipped_pages}",
             ]
         )
         if file_result.structural_debug_path:
@@ -179,6 +195,8 @@ def _text_report(run_result: RunResult) -> str:
             lines.append(f"  pypdf_warnings_debug={file_result.pypdf_warnings_path}")
         if file_result.render_debug_path:
             lines.append(f"  render_debug={file_result.render_debug_path}")
+        if file_result.stamping_debug_path:
+            lines.append(f"  stamp_debug={file_result.stamping_debug_path}")
         if file_result.warnings:
             lines.extend(f"  warning: {warning}" for warning in file_result.warnings)
         if file_result.errors:

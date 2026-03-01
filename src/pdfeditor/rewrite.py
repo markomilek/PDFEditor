@@ -9,7 +9,8 @@ from typing import Any
 
 from pypdf import PdfReader, PdfWriter
 
-from pdfeditor.models import RewriteResult
+from pdfeditor.models import JSONValue, RewriteResult
+from pdfeditor.stamp_page_numbers import stamp_page_numbers
 
 EDITED_NAME_PATTERN = re.compile(r"\.edited(?:\.\d+)?\.pdf\Z", re.IGNORECASE)
 
@@ -19,6 +20,7 @@ def rewrite_pdf(
     output_path: Path,
     pages_to_keep: list[int],
     bookmark_policy: str = "drop",
+    stamp_config: dict[str, JSONValue] | None = None,
 ) -> RewriteResult:
     """Rewrite a PDF while retaining only the requested page indexes."""
     if bookmark_policy != "drop":
@@ -31,6 +33,7 @@ def rewrite_pdf(
 
     keep_list = list(pages_to_keep)
     full_keep = keep_list == list(range(len(reader.pages)))
+    stamp_decisions: list[dict[str, JSONValue]] = []
     if full_keep:
         writer.clone_document_from_reader(reader)
         pages_output = len(reader.pages)
@@ -53,6 +56,21 @@ def rewrite_pdf(
             )
         pages_output = len(keep_list)
 
+    if stamp_config is not None:
+        stamp_page_numbers(
+            writer=writer,
+            pages_kept_original_indices=keep_list if keep_list else list(range(len(writer.pages))),
+            pagenum_box_in=_tuple4(stamp_config["pagenum_box"]),
+            pagenum_font=str(stamp_config["pagenum_font"]),
+            pagenum_size=float(stamp_config["pagenum_size"]),
+            pagenum_format=str(stamp_config["pagenum_format"]),
+            render_dpi=int(stamp_config["render_dpi"]),
+            white_threshold=int(stamp_config["white_threshold"]),
+            ink_threshold=float(stamp_config["ink_threshold"]),
+            force=bool(stamp_config["force"]),
+            report_hook=stamp_decisions.append,
+        )
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("wb") as handle:
         writer.write(handle)
@@ -62,6 +80,16 @@ def rewrite_pdf(
         pages_output=pages_output,
         outlines_copied=outlines_copied,
         outlines_dropped=outlines_dropped,
+        stamp_decisions=stamp_decisions,
+        stamping_applied_pages=sum(
+            1 for decision in stamp_decisions if decision.get("action") in {"stamped", "stamped_forced"}
+        ),
+        stamping_forced_pages=sum(
+            1 for decision in stamp_decisions if decision.get("action") == "stamped_forced"
+        ),
+        stamping_skipped_pages=sum(
+            1 for decision in stamp_decisions if decision.get("action") == "skipped_guardrail"
+        ),
         warnings=warnings,
     )
 
@@ -206,3 +234,10 @@ def _get_outline_title(entry: Any) -> str:
     if not title:
         return "Untitled"
     return str(title)
+
+
+def _tuple4(value: JSONValue) -> tuple[float, float, float, float]:
+    if not isinstance(value, list | tuple) or len(value) != 4:
+        raise ValueError("Expected a 4-value box tuple for page-number stamping.")
+    first, second, third, fourth = value
+    return (float(first), float(second), float(third), float(fourth))

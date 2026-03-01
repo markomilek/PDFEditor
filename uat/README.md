@@ -59,6 +59,18 @@ Debug artifacts are written into `uat/reports/` as:
 
 `--render-sample-margin` values are inches in `TOP,LEFT,RIGHT,BOTTOM` order.
 
+### Page Number Stamping
+
+To stamp corrected page numbers after removal:
+
+```bash
+pdfeditor --path uat/input --out uat/output --report-dir uat/reports --mode both --stamp-page-numbers --pagenum-box "0.75,0.25,1.0,0.5" --verbose
+```
+
+`--pagenum-box` uses inches from the bottom-left page origin in `x,y,w,h` order.
+If the configured box overlaps real content above the current `ink_threshold`, stamping is skipped for that page.
+Use `--stamp-page-numbers-force` only when you want to bypass that guardrail and always stamp.
+
 ## Suggested Test PDFs
 
 Include representative real-world samples such as:

@@ -15,6 +15,7 @@ from pdfeditor.reporting import build_run_result, write_run_reports
 
 EDITED_INPUT_PATTERN = re.compile(r"\.edited(?:\.\d+)?\.pdf\Z", re.IGNORECASE)
 RenderSampleMargin = tuple[float, float, float, float]
+PageNumberBox = tuple[float, float, float, float]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -72,6 +73,39 @@ def build_parser() -> argparse.ArgumentParser:
         help="Treat pixels with R,G,B values at or above this threshold as white.",
     )
     parser.add_argument(
+        "--stamp-page-numbers",
+        action="store_true",
+        help="Cover the configured page-number box and stamp corrected page numbers after deletions.",
+    )
+    parser.add_argument(
+        "--stamp-page-numbers-force",
+        action="store_true",
+        help="Force stamping even if the page-number box contains ink (bypass guardrail). Use with caution.",
+    )
+    parser.add_argument(
+        "--pagenum-box",
+        type=_parse_pagenum_box,
+        default=None,
+        help='Page number box in inches from bottom-left: "x,y,w,h"',
+    )
+    parser.add_argument(
+        "--pagenum-size",
+        type=float,
+        default=10.0,
+        help="Stamped page number font size in points. Default: 10.",
+    )
+    parser.add_argument(
+        "--pagenum-font",
+        choices=("Helvetica", "Times-Roman", "Courier"),
+        default="Helvetica",
+        help="Stamped page number font. Default: Helvetica.",
+    )
+    parser.add_argument(
+        "--pagenum-format",
+        default="{page}",
+        help="Stamped page number text. Supports {page}, {roman}, and {ROMAN}.",
+    )
+    parser.add_argument(
         "--recursive",
         action="store_true",
         help="Scan subdirectories recursively for PDF files.",
@@ -122,9 +156,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def run_cli(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return the process exit code."""
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
     debug_pypdf_xref = bool(args.debug_pypdf_xref or args.strict_xref)
     _configure_pypdf_logging(capture_warnings=debug_pypdf_xref)
+    _validate_cli_args(parser=parser, args=args)
 
     scan_path = Path(args.path)
     out_dir = Path(args.out) if args.out is not None else scan_path
@@ -159,6 +195,16 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
         effective_background=effective_background,
         render_sample_margin=tuple(float(value) for value in args.render_sample_margin),
         white_threshold=int(args.white_threshold),
+        stamp_page_numbers=bool(args.stamp_page_numbers),
+        stamp_page_numbers_force=bool(args.stamp_page_numbers_force),
+        pagenum_box=(
+            tuple(float(value) for value in args.pagenum_box)
+            if args.pagenum_box is not None
+            else None
+        ),
+        pagenum_size=float(args.pagenum_size),
+        pagenum_font=str(args.pagenum_font),
+        pagenum_format=str(args.pagenum_format),
         recursive=bool(args.recursive),
         write_when_unchanged=bool(args.write_when_unchanged),
         treat_annotations_as_empty=bool(args.treat_annotations_as_empty),
@@ -192,6 +238,8 @@ def run_cli(argv: Sequence[str] | None = None) -> int:
                     print(f"wrote pypdf warnings debug to {file_result.pypdf_warnings_path}")
                 if file_result.render_debug_path is not None:
                     print(f"wrote render debug to {file_result.render_debug_path}")
+                if file_result.stamping_debug_path is not None:
+                    print(f"wrote stamp debug to {file_result.stamping_debug_path}")
 
     run_result = build_run_result(
         config=config,
@@ -243,25 +291,56 @@ def _configure_pypdf_logging(capture_warnings: bool) -> None:
 
 def _parse_render_sample_margin(value: str) -> RenderSampleMargin:
     """Parse TOP,LEFT,RIGHT,BOTTOM sampling margins in inches."""
+    top, left, right, bottom = _parse_box_floats(
+        value=value,
+        label="render sample margin",
+        names="TOP,LEFT,RIGHT,BOTTOM",
+    )
+    return (top, left, right, bottom)
+
+
+def _parse_pagenum_box(value: str) -> PageNumberBox:
+    """Parse x,y,w,h page-number box inches from the bottom-left origin."""
+    x, y, width, height = _parse_box_floats(
+        value=value,
+        label="page number box",
+        names="x,y,w,h",
+    )
+    return (x, y, width, height)
+
+
+def _parse_box_floats(
+    value: str,
+    label: str,
+    names: str,
+) -> tuple[float, float, float, float]:
+    """Parse four non-negative floats from a comma-separated CLI value."""
     parts = [part.strip() for part in value.split(",")]
     if len(parts) != 4:
         raise argparse.ArgumentTypeError(
-            "render sample margin must contain exactly 4 comma-separated values: "
-            "TOP,LEFT,RIGHT,BOTTOM"
+            f"{label} must contain exactly 4 comma-separated values: {names}"
         )
 
-    margins: list[float] = []
+    values: list[float] = []
     for part in parts:
         try:
-            margin = float(part)
+            number = float(part)
         except ValueError as exc:
             raise argparse.ArgumentTypeError(
-                "render sample margin values must be numbers in inches"
+                f"{label} values must be numbers in inches"
             ) from exc
-        if margin < 0:
+        if number < 0:
             raise argparse.ArgumentTypeError(
-                "render sample margin values must be >= 0 inches"
+                f"{label} values must be >= 0 inches"
             )
-        margins.append(margin)
-    top, left, right, bottom = margins
-    return (top, left, right, bottom)
+        values.append(number)
+    first, second, third, fourth = values
+    return (first, second, third, fourth)
+
+
+def _validate_cli_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    """Validate CLI argument combinations after parsing."""
+    if args.stamp_page_numbers and args.pagenum_box is None:
+        parser.error("--pagenum-box is required when --stamp-page-numbers is enabled.")
+    if args.stamp_page_numbers_force and not args.stamp_page_numbers:
+        parser.error("--stamp-page-numbers-force requires --stamp-page-numbers.")
